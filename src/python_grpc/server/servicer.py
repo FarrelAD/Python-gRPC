@@ -1,4 +1,4 @@
-"""Async gRPC telemetry collector for PZEM-004t devices.
+"""gRPC servicer implementing the DeviceTelemetry service.
 
 Implements all four gRPC call types:
   - ReportReading     : unary-unary           (single reading -> ack)
@@ -124,26 +124,3 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
                 yield _ack(True, f"stored reading from {report.device_id}")
             else:
                 yield _ack(False, f"rejected invalid reading from {report.device_id}")
-
-
-async def serve(host: str = "[::]", port: int = 50051) -> None:
-    server = grpc.aio.server()
-    servicer = DeviceTelemetryServicer()
-    pzem_004t_pb2_grpc.add_DeviceTelemetryServicer_to_server(servicer, server)
-    listen_addr = f"{host}:{port}"
-    server.add_insecure_port(listen_addr)
-    await server.start()
-    print(f"PZEM-004t collector listening on {listen_addr}")
-    try:
-        await server.wait_for_termination()
-    finally:
-        await server.stop(grace=5)
-
-
-def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    asyncio.run(serve())
-
-
-if __name__ == "__main__":
-    main()

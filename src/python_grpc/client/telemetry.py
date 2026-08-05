@@ -1,4 +1,4 @@
-"""Demo client: a simulated PZEM-004t device pushing telemetry via gRPC.
+"""gRPC telemetry client used by the demo.
 
 Exercises all four gRPC call types against the collector server:
   - unary         : ReportReading    (single reading -> ack)
@@ -9,7 +9,6 @@ Exercises all four gRPC call types against the collector server:
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 
 import grpc
@@ -89,25 +88,5 @@ async def run_demo(
         print("Done.")
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="PZEM-004t gRPC demo client")
-    parser.add_argument("--target", default=DEFAULT_TARGET, help="server address, e.g. localhost:50051")
-    parser.add_argument("--device-id", default="PZEM-004T-0001")
-    parser.add_argument("--count", type=int, default=5, help="readings per streaming RPC")
-    parser.add_argument(
-        "--rpc",
-        default=["unary", "client-stream", "server-stream", "bidi"],
-        choices=["unary", "client-stream", "server-stream", "bidi"],
-        nargs="*",
-        help="RPC types to run (default: all)",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = _parse_args()
-    asyncio.run(run_demo(args.target, args.device_id, args.count, set(args.rpc)))
-
-
-if __name__ == "__main__":
-    main()
+def run(target: str, device_id: str, count: int, rpcs: set[str]) -> None:
+    asyncio.run(run_demo(target, device_id, count, rpcs))

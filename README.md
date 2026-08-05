@@ -10,11 +10,11 @@ frequency, power factor) and pushes it over gRPC to a collector server.
 ```mermaid
 flowchart LR
     subgraph Device["PZEM-004t Device (client)"]
-        A1["client.py"]
-        A2["device.py"]
+        A1["client/ (telemetry.py)"]
+        A2["device/ (pzem_004t.py)"]
     end
     subgraph Collector["Telemetry Collector (server)"]
-        B1["server.py"]
+        B1["server/ (servicer.py + app.py)"]
         B2["in-memory store + logging"]
     end
 
@@ -39,18 +39,24 @@ demo runs out of the box.
 
 ```
 src/python_grpc/
-  proto/
-    pzem_004t.proto          # protobuf schema (authoritative)
-    pzem_004t_pb2.py         # generated message classes
-    pzem_004t_pb2_grpc.py    # generated service stubs
-  device.py                  # PZEM004TDevice simulator
-  server.py                  # grpc.aio collector (all 4 RPCs)
-  client.py                  # demo client CLI
+  proto/                       # protobuf schema + generated stubs
+    pzem_004t.proto            # schema (authoritative)
+    pzem_004t_pb2.py           # generated message classes
+    pzem_004t_pb2_grpc.py      # generated service stubs
+  device/
+    pzem_004t.py               # PZEM004TDevice simulator
+  client/
+    telemetry.py               # gRPC client logic (4 RPC runners)
+    __main__.py                # CLI entry point
+  server/
+    servicer.py                # DeviceTelemetryServicer (all 4 RPCs)
+    app.py                     # serve()/main() bootstrap
+    __main__.py                # CLI entry point
 scripts/
-  gen_proto.py               # regenerate stubs from the proto
+  gen_proto.py                 # regenerate stubs from the proto
 tests/
-  test_device.py             # simulator unit tests
-  test_telemetry.py          # end-to-end RPC tests (local server)
+  test_device.py               # simulator unit tests
+  test_telemetry.py            # end-to-end RPC tests (local server)
 ```
 
 ## Requirements
