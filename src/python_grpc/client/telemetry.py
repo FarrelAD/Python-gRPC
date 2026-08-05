@@ -18,6 +18,8 @@ from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
 
 DEFAULT_TARGET = "localhost:50051"
 
+DeviceTelemetryStub = pzem_004t_pb2_grpc.DeviceTelemetryStub
+
 
 def _fmt(report: pzem_004t_pb2.ReadingReport) -> str:
     return (
@@ -27,12 +29,14 @@ def _fmt(report: pzem_004t_pb2.ReadingReport) -> str:
     )
 
 
-async def run_unary(stub, device: PZEM004TDevice) -> None:
+async def run_unary(stub: DeviceTelemetryStub, device: PZEM004TDevice) -> None:
     ack = await stub.ReportReading(device.read())
     print(f"[unary]    ReportReading  -> success={ack.success} msg={ack.message!r}")
 
 
-async def run_client_streaming(stub, device: PZEM004TDevice, count: int) -> None:
+async def run_client_streaming(
+    stub: DeviceTelemetryStub, device: PZEM004TDevice, count: int
+) -> None:
     async def readings():
         for _ in range(count):
             yield device.read()
@@ -44,7 +48,9 @@ async def run_client_streaming(stub, device: PZEM004TDevice, count: int) -> None
     )
 
 
-async def run_server_streaming(stub, device: PZEM004TDevice, count: int) -> None:
+async def run_server_streaming(
+    stub: DeviceTelemetryStub, device: PZEM004TDevice, count: int
+) -> None:
     request = pzem_004t_pb2.SubscribeRequest(device_id=device.device_id)
     print(f"[server]   Subscribe      -> live readings for {device.device_id}:")
     call = stub.Subscribe(request)
@@ -57,7 +63,7 @@ async def run_server_streaming(stub, device: PZEM004TDevice, count: int) -> None
             break
 
 
-async def run_bidi(stub, device: PZEM004TDevice, count: int) -> None:
+async def run_bidi(stub: DeviceTelemetryStub, device: PZEM004TDevice, count: int) -> None:
     async def readings():
         for _ in range(count):
             yield device.read()

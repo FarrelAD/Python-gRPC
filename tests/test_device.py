@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import unittest
+from typing import override
 
 from python_grpc.device import PZEM004TDevice
 
 
 class TestPZEM004TDevice(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.device = PZEM004TDevice(seed=7)
 

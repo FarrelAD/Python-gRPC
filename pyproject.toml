@@ -11,12 +11,29 @@ dependencies = [
     "fastapi (>=0.141.1,<0.142.0)",
     "grpcio (>=1.83.0,<2.0.0)",
     "grpcio-tools (>=1.83.0,<2.0.0)",
-    "protobuf (>=7.35.1,<8.0.0)"
+    "protobuf (>=7.35.1,<8.0.0)",
 ]
 
 [tool.poetry]
 packages = [{include = "python_grpc", from = "src"}]
 
+[tool.pyrefly]
+preset = "strict"
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+project-excludes = [
+    "**/python_grpc/proto/*_pb2*.py*",
+]
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pyrefly (>=1.2.0,<2.0.0)",
+    "types-grpcio (>=1.83.0.20260730,<2.0.0.0)",
+    "types-protobuf (>=7.34.1.20260518,<8.0.0.0)"
+]

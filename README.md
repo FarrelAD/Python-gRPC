@@ -103,6 +103,20 @@ poetry run python -m unittest discover -s tests -v
 Tests spin up a real local `grpc.aio` server on an ephemeral port and verify
 every RPC type end-to-end.
 
+## Type checking
+
+Pyrefly runs in `strict` mode against the whole project (`preset = "strict"` in
+`pyproject.toml`). Generated gRPC stubs (`*_pb2*.py`) are excluded from
+checking, and the servicer file suppresses `bad-override` — the overrides
+intentionally narrow the untyped signatures of the generated base class.
+
+```bash
+poetry run pyrefly check
+```
+
+Type stubs for `grpcio` and `protobuf` (`types-grpcio`, `types-protobuf`) are
+installed as dev dependencies so third-party code is fully typed.
+
 ## Regenerating stubs
 
 After editing `pzem_004t.proto`:

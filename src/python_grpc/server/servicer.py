@@ -5,13 +5,21 @@ Implements all four gRPC call types:
   - ReportReadings    : client-streaming      (batch upload -> summary)
   - Subscribe         : server-streaming      (live readings pushed out)
   - StreamTelemetry   : bidi-streaming        (continuous two-way exchange)
+
+The overrides below intentionally narrow the untyped signatures inherited from
+the generated pzem_004t_pb2_grpc.DeviceTelemetryServicer base class, which
+pyrefly flags as `bad-override`.
 """
+
+# pyrefly: ignore-errors[bad-override]
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
+from typing import override
 
 import grpc
 
@@ -53,10 +61,11 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
     def readings(self) -> list[pzem_004t_pb2.ReadingReport]:
         return self._readings
 
+    @override
     async def ReportReading(
         self,
         request: pzem_004t_pb2.ReadingReport,
-        context: grpc.aio.ServicerContext,
+        context: grpc.aio.ServicerContext[pzem_004t_pb2.ReadingReport, pzem_004t_pb2.Ack],
     ) -> pzem_004t_pb2.Ack:
         if not _is_valid(request):
             return _ack(False, f"rejected invalid reading from {request.device_id}")
@@ -70,10 +79,11 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
         )
         return _ack(True, f"stored reading #{len(self._readings)} from {request.device_id}")
 
+    @override
     async def ReportReadings(
         self,
         request_iterator: grpc.aio.AsyncIterable[pzem_004t_pb2.ReadingReport],
-        context: grpc.aio.ServicerContext,
+        context: grpc.aio.ServicerContext[pzem_004t_pb2.ReadingReport, pzem_004t_pb2.BatchSummary],
     ) -> pzem_004t_pb2.BatchSummary:
         received = 0
         rejected = 0
@@ -98,11 +108,12 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
         )
         return summary
 
+    @override
     async def Subscribe(
         self,
         request: pzem_004t_pb2.SubscribeRequest,
-        context: grpc.aio.ServicerContext,
-    ):
+        context: grpc.aio.ServicerContext[pzem_004t_pb2.SubscribeRequest, pzem_004t_pb2.ReadingReport],
+    ) -> AsyncIterator[pzem_004t_pb2.ReadingReport]:
         device_id = request.device_id or "PZEM-004T-LIVE"
         device = PZEM004TDevice(device_id=device_id)
         logger.info("Subscribe device=%s connected", device_id)
@@ -113,11 +124,12 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
         except (asyncio.CancelledError, grpc.RpcError):
             logger.info("Subscribe device=%s disconnected", device_id)
 
+    @override
     async def StreamTelemetry(
         self,
         request_iterator: grpc.aio.AsyncIterable[pzem_004t_pb2.ReadingReport],
-        context: grpc.aio.ServicerContext,
-    ):
+        context: grpc.aio.ServicerContext[pzem_004t_pb2.ReadingReport, pzem_004t_pb2.Ack],
+    ) -> AsyncIterator[pzem_004t_pb2.Ack]:
         async for report in request_iterator:
             if _is_valid(report):
                 self._readings.append(report)

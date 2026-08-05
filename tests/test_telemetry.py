@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from typing import override
 
 import grpc
 
@@ -12,6 +13,7 @@ from python_grpc.server import DeviceTelemetryServicer
 
 
 class TelemetryTestCase(unittest.IsolatedAsyncioTestCase):
+    @override
     async def asyncSetUp(self) -> None:
         self.server = grpc.aio.server()
         self.servicer = DeviceTelemetryServicer()
@@ -22,6 +24,7 @@ class TelemetryTestCase(unittest.IsolatedAsyncioTestCase):
         self.stub = pzem_004t_pb2_grpc.DeviceTelemetryStub(self.channel)
         self.device = PZEM004TDevice(seed=42)
 
+    @override
     async def asyncTearDown(self) -> None:
         await self.channel.close()
         await self.server.stop(grace=0)
