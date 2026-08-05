@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package pzem004t;
+
+service DeviceTelemetry {
+  rpc ReportReading(ReadingReport) returns (Ack);
+  rpc ReportReadings(stream ReadingReport) returns (BatchSummary);
+  rpc Subscribe(SubscribeRequest) returns (stream ReadingReport);
+  rpc StreamTelemetry(stream ReadingReport) returns (stream Ack);
+}
+
+message ReadingReport {
+  string device_id = 1;
+  string device_type = 2;
+  int64 timestamp_unix_ms = 3;
+  double voltage = 4;
+  double current = 5;
+  double active_power = 6;
+  double energy = 7;
+  double frequency = 8;
+  double power_factor = 9;
+}
+
+message Ack {
+  bool success = 1;
+  string message = 2;
+  int64 received_at_unix_ms = 3;
+}
+
+message BatchSummary {
+  int32 received = 1;
+  int32 rejected = 2;
+  double avg_active_power = 3;
+}
+
+message SubscribeRequest {
+  string device_id = 1;
+}
