@@ -127,7 +127,7 @@ poetry run python -m python_grpc.apps.rest_gateway --host 0.0.0.0 --port 8000 --
 ```
 Open your browser at `http://localhost:8000/docs` to test Swagger UI or send a cURL request:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/telemetry" \
+curl -X POST "http://localhost:8000/api/telemetry" \
   -H "Content-Type: application/json" \
   -d '{"device_id": "REST-01", "voltage": 230.2, "current": 2.1, "active_power": 483.4, "energy": 1.2, "frequency": 50.0, "power_factor": 0.99}'
 ```

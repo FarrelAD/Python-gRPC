@@ -56,7 +56,7 @@ async def test_gateway_unary_post(
         "frequency": 50.0,
         "power_factor": 0.99,
     }
-    response = await client.post("/api/v1/telemetry", json=payload)
+    response = await client.post("/api/telemetry", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
@@ -81,7 +81,7 @@ async def test_gateway_batch_post(
         }
         for i in range(3)
     ]
-    response = await client.post("/api/v1/telemetry/batch", json=readings)
+    response = await client.post("/api/telemetry/batch", json=readings)
     assert response.status_code == 200
     data = response.json()
     assert data["received"] == 3
