@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 import grpc
 import pytest
 
@@ -14,8 +15,9 @@ from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
 
 @pytest.fixture
 async def telemetry_env() -> AsyncGenerator[
-    tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice],
-    None,
+    tuple[
+        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice
+    ]
 ]:
     server = grpc.aio.server()
     servicer = DeviceTelemetryServicer()
@@ -35,7 +37,9 @@ async def telemetry_env() -> AsyncGenerator[
 
 
 async def test_valid_reading_is_acknowledged_and_stored(
-    telemetry_env: tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice]
+    telemetry_env: tuple[
+        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice
+    ],
 ) -> None:
     servicer, stub, device = telemetry_env
     ack = await stub.ReportReading(device.read())
@@ -46,7 +50,9 @@ async def test_valid_reading_is_acknowledged_and_stored(
 
 
 async def test_invalid_reading_is_rejected(
-    telemetry_env: tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice]
+    telemetry_env: tuple[
+        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice
+    ],
 ) -> None:
     servicer, stub, device = telemetry_env
     report = device.read()
@@ -57,7 +63,9 @@ async def test_invalid_reading_is_rejected(
 
 
 async def test_batch_upload_produces_summary(
-    telemetry_env: tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice]
+    telemetry_env: tuple[
+        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice
+    ],
 ) -> None:
     servicer, stub, device = telemetry_env
 
@@ -79,7 +87,9 @@ async def test_batch_upload_produces_summary(
 
 
 async def test_streams_live_readings_for_device(
-    telemetry_env: tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice]
+    telemetry_env: tuple[
+        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice
+    ],
 ) -> None:
     _, stub, device = telemetry_env
     request = pzem_004t_pb2.SubscribeRequest(device_id=device.device_id)
@@ -113,7 +123,9 @@ async def test_streams_live_readings_for_device(
 
 
 async def test_every_reading_gets_an_ack(
-    telemetry_env: tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice]
+    telemetry_env: tuple[
+        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, PZEM004TDevice
+    ],
 ) -> None:
     servicer, stub, device = telemetry_env
 

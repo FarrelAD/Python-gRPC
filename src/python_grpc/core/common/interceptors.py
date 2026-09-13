@@ -24,13 +24,17 @@ REQUEST_ID_HEADER = "x-request-id"
 CLIENT_VERSION_HEADER = "x-client-version"
 
 
-class RequestIdClientInterceptor(UnaryUnaryClientInterceptor, UnaryStreamClientInterceptor):
+class RequestIdClientInterceptor(
+    UnaryUnaryClientInterceptor, UnaryStreamClientInterceptor
+):
     """Injects a unique request-id header into outgoing gRPC calls if not already present."""
 
     def __init__(self, client_version: str = "1.0.0") -> None:
         self.client_version = client_version
 
-    def _inject_metadata(self, client_call_details: ClientCallDetails) -> ClientCallDetails:
+    def _inject_metadata(
+        self, client_call_details: ClientCallDetails
+    ) -> ClientCallDetails:
         metadata = list(client_call_details.metadata or [])
         has_req_id = any(k == REQUEST_ID_HEADER for k, _ in metadata)
         if not has_req_id:
@@ -92,7 +96,9 @@ class ServerLoggingAndRecoveryInterceptor(ServerInterceptor):
         if handler.unary_unary:
             unary_unary_fn = handler.unary_unary
 
-            async def logged_unary_unary(request: Any, context: grpc.aio.ServicerContext[Any, Any]) -> Any:
+            async def logged_unary_unary(
+                request: Any, context: grpc.aio.ServicerContext[Any, Any]
+            ) -> Any:
                 start = time.perf_counter()
                 peer = context.peer()
                 try:
@@ -123,7 +129,9 @@ class ServerLoggingAndRecoveryInterceptor(ServerInterceptor):
                         duration_ms,
                         exc,
                     )
-                    await context.abort(grpc.StatusCode.INTERNAL, f"Internal server error: {exc}")
+                    await context.abort(
+                        grpc.StatusCode.INTERNAL, f"Internal server error: {exc}"
+                    )
 
             return grpc.unary_unary_rpc_method_handler(
                 logged_unary_unary,

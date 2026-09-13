@@ -12,9 +12,9 @@ Implements all four gRPC call types:
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 import logging
 import time
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from typing import override
 
@@ -59,7 +59,9 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
     def __init__(self) -> None:
         self._readings: list[pzem_004t_pb2.ReadingReport] = []
         # Pub/Sub registry: device_id -> set of active subscriber asyncio.Queues
-        self._subscribers: dict[str, set[asyncio.Queue[pzem_004t_pb2.ReadingReport]]] = defaultdict(set)
+        self._subscribers: dict[
+            str, set[asyncio.Queue[pzem_004t_pb2.ReadingReport]]
+        ] = defaultdict(set)
 
     @property
     def readings(self) -> list[pzem_004t_pb2.ReadingReport]:
@@ -73,13 +75,17 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
             try:
                 q.put_nowait(report)
             except asyncio.QueueFull:
-                logger.warning("Subscriber queue full, dropping reading for %s", report.device_id)
+                logger.warning(
+                    "Subscriber queue full, dropping reading for %s", report.device_id
+                )
 
     @override
     async def ReportReading(
         self,
         request: pzem_004t_pb2.ReadingReport,
-        context: grpc.aio.ServicerContext[pzem_004t_pb2.ReadingReport, pzem_004t_pb2.Ack],
+        context: grpc.aio.ServicerContext[
+            pzem_004t_pb2.ReadingReport, pzem_004t_pb2.Ack
+        ],
     ) -> pzem_004t_pb2.Ack:
         if not _is_valid(request):
             return _ack(False, f"rejected invalid reading from {request.device_id}")
@@ -92,13 +98,17 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
             request.current,
             request.active_power,
         )
-        return _ack(True, f"stored reading #{len(self._readings)} from {request.device_id}")
+        return _ack(
+            True, f"stored reading #{len(self._readings)} from {request.device_id}"
+        )
 
     @override
     async def ReportReadings(
         self,
         request_iterator: grpc.aio.AsyncIterable[pzem_004t_pb2.ReadingReport],
-        context: grpc.aio.ServicerContext[pzem_004t_pb2.ReadingReport, pzem_004t_pb2.BatchSummary],
+        context: grpc.aio.ServicerContext[
+            pzem_004t_pb2.ReadingReport, pzem_004t_pb2.BatchSummary
+        ],
     ) -> pzem_004t_pb2.BatchSummary:
         received = 0
         rejected = 0
@@ -128,7 +138,9 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
     async def Subscribe(
         self,
         request: pzem_004t_pb2.SubscribeRequest,
-        context: grpc.aio.ServicerContext[pzem_004t_pb2.SubscribeRequest, pzem_004t_pb2.ReadingReport],
+        context: grpc.aio.ServicerContext[
+            pzem_004t_pb2.SubscribeRequest, pzem_004t_pb2.ReadingReport
+        ],
     ) -> AsyncIterator[pzem_004t_pb2.ReadingReport]:
         target_device = request.device_id or "*"
         q: asyncio.Queue[pzem_004t_pb2.ReadingReport] = asyncio.Queue(maxsize=100)
@@ -151,7 +163,9 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
     async def StreamTelemetry(
         self,
         request_iterator: grpc.aio.AsyncIterable[pzem_004t_pb2.ReadingReport],
-        context: grpc.aio.ServicerContext[pzem_004t_pb2.ReadingReport, pzem_004t_pb2.Ack],
+        context: grpc.aio.ServicerContext[
+            pzem_004t_pb2.ReadingReport, pzem_004t_pb2.Ack
+        ],
     ) -> AsyncIterator[pzem_004t_pb2.Ack]:
         async for report in request_iterator:
             if _is_valid(report):

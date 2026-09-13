@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import AsyncIterable
+from collections.abc import AsyncIterable
 
 import grpc
 from grpc_health.v1 import health_pb2, health_pb2_grpc
@@ -55,14 +55,22 @@ async def check_health(channel: grpc.aio.Channel, service_name: str = "") -> boo
         )
         return is_healthy
     except grpc.RpcError as exc:
-        logger.warning("Health check failed: code=%s details=%s", exc.code(), exc.details())
+        logger.warning(
+            "Health check failed: code=%s details=%s", exc.code(), exc.details()
+        )
         return False
 
 
-async def run_unary(stub: DeviceTelemetryStub, device: PZEM004TDevice, timeout: float = DEFAULT_TIMEOUT_S) -> None:
+async def run_unary(
+    stub: DeviceTelemetryStub,
+    device: PZEM004TDevice,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> None:
     reading = device.read()
     ack = await stub.ReportReading(reading, timeout=timeout)
-    logger.info("[unary]    ReportReading  -> success=%s msg=%r", ack.success, ack.message)
+    logger.info(
+        "[unary]    ReportReading  -> success=%s msg=%r", ack.success, ack.message
+    )
 
 
 async def run_client_streaming(
@@ -137,7 +145,9 @@ async def run_demo(
         logger.info("Connecting to collector at %s (Device: %s)", target, device_id)
         is_healthy = await check_health(channel)
         if not is_healthy:
-            logger.warning("Target %s is not currently reporting SERVING status.", target)
+            logger.warning(
+                "Target %s is not currently reporting SERVING status.", target
+            )
 
         stub = pzem_004t_pb2_grpc.DeviceTelemetryStub(channel)
 

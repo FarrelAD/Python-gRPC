@@ -13,18 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 
 import grpc
 
 from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
-from python_grpc.apps.device_agent.agent import check_health, run_unary
 from python_grpc.core.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
 from python_grpc.core.common.interceptors import RequestIdClientInterceptor
 from python_grpc.core.device.pzem_004t import PZEM004TDevice
 from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s"
+)
 logger = logging.getLogger("cross_host_sim")
 
 
@@ -56,8 +56,12 @@ async def main() -> None:
             interceptors=[RequestIdClientInterceptor(client_version="monitor-1.0")],
         ) as channel:
             stub = pzem_004t_pb2_grpc.DeviceTelemetryStub(channel)
-            host2_logger.info("Host 2 connected. Subscribing to live telemetry for 'PZEM-REMOTE-01'...")
-            call = stub.Subscribe(pzem_004t_pb2.SubscribeRequest(device_id="PZEM-REMOTE-01"))
+            host2_logger.info(
+                "Host 2 connected. Subscribing to live telemetry for 'PZEM-REMOTE-01'..."
+            )
+            call = stub.Subscribe(
+                pzem_004t_pb2.SubscribeRequest(device_id="PZEM-REMOTE-01")
+            )
             try:
                 async for reading in call:
                     host2_logger.info(
@@ -98,7 +102,9 @@ async def main() -> None:
                     reading.current,
                 )
                 ack = await stub.ReportReading(reading, timeout=5.0)
-                host3_logger.info("<- [ACKNOWLEDGED] Host 3 got server ack: %s", ack.message)
+                host3_logger.info(
+                    "<- [ACKNOWLEDGED] Host 3 got server ack: %s", ack.message
+                )
                 await asyncio.sleep(0.3)
 
     # Run Host 2 and Host 3 concurrently communicating through Host 1
@@ -108,7 +114,9 @@ async def main() -> None:
     await asyncio.gather(t2, t3)
 
     print("\n" + "-" * 70)
-    print(f"  Simulation complete: Host 2 received {len(received_readings)} live packets streamed from Host 3")
+    print(
+        f"  Simulation complete: Host 2 received {len(received_readings)} live packets streamed from Host 3"
+    )
     print("-" * 70 + "\n")
 
     await server.stop(grace=0)

@@ -85,7 +85,9 @@ async def serve(host: str = "0.0.0.0", port: int = 50051) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PZEM-004t gRPC Telemetry Collector Service")
+    parser = argparse.ArgumentParser(
+        description="PZEM-004t gRPC Telemetry Collector Service"
+    )
     parser.add_argument(
         "--host",
         default=os.getenv("COLLECTOR_HOST", "0.0.0.0"),

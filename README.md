@@ -151,6 +151,23 @@ Tests run 17 automated integration and unit tests covering:
 - Standard gRPC Health Checking (`grpc.health.v1`) & Interceptors ([`tests/test_health_and_interceptors.py`](tests/test_health_and_interceptors.py))
 - FastAPI REST-to-gRPC unary and batch forwarding ([`tests/test_gateway.py`](tests/test_gateway.py))
 
+## Code Formatting & Linting
+
+Ruff is used for ultra-fast linting and code formatting:
+```bash
+# Check for lint violations
+poetry run ruff check .
+
+# Automatically apply safe lint fixes
+poetry run ruff check --fix .
+
+# Check formatting without modifying files
+poetry run ruff format --check .
+
+# Automatically format the entire codebase
+poetry run ruff format .
+```
+
 ## Type Checking
 
 Pyrefly runs in `strict` mode against the entire codebase (`preset = "strict"` in `pyproject.toml`):

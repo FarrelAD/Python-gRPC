@@ -4,21 +4,29 @@
 
 from __future__ import annotations
 
-from typing import AsyncGenerator
-import pytest
+from collections.abc import AsyncGenerator
+
 import grpc
+import pytest
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
 from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
-from python_grpc.core.common.interceptors import RequestIdClientInterceptor, ServerLoggingAndRecoveryInterceptor
+from python_grpc.core.common.interceptors import (
+    RequestIdClientInterceptor,
+    ServerLoggingAndRecoveryInterceptor,
+)
 from python_grpc.core.device.pzem_004t import PZEM004TDevice
 from python_grpc.proto import pzem_004t_pb2_grpc
 
 
 @pytest.fixture
 async def health_and_interceptors_env() -> AsyncGenerator[
-    tuple[DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, health_pb2_grpc.HealthStub, str],
-    None,
+    tuple[
+        DeviceTelemetryServicer,
+        pzem_004t_pb2_grpc.DeviceTelemetryStub,
+        health_pb2_grpc.HealthStub,
+        str,
+    ]
 ]:
     server = grpc.aio.server(interceptors=[ServerLoggingAndRecoveryInterceptor()])
     servicer = DeviceTelemetryServicer()
@@ -50,8 +58,11 @@ async def health_and_interceptors_env() -> AsyncGenerator[
 
 async def test_health_check_returns_serving(
     health_and_interceptors_env: tuple[
-        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, health_pb2_grpc.HealthStub, str
-    ]
+        DeviceTelemetryServicer,
+        pzem_004t_pb2_grpc.DeviceTelemetryStub,
+        health_pb2_grpc.HealthStub,
+        str,
+    ],
 ) -> None:
     _, _, health_stub, service_name = health_and_interceptors_env
     res = await health_stub.Check(health_pb2.HealthCheckRequest(service=service_name))
@@ -60,19 +71,27 @@ async def test_health_check_returns_serving(
 
 async def test_health_check_unknown_service_returns_not_found(
     health_and_interceptors_env: tuple[
-        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, health_pb2_grpc.HealthStub, str
-    ]
+        DeviceTelemetryServicer,
+        pzem_004t_pb2_grpc.DeviceTelemetryStub,
+        health_pb2_grpc.HealthStub,
+        str,
+    ],
 ) -> None:
     _, _, health_stub, _ = health_and_interceptors_env
     with pytest.raises(grpc.aio.AioRpcError) as ctx:
-        await health_stub.Check(health_pb2.HealthCheckRequest(service="non.existent.Service"))
+        await health_stub.Check(
+            health_pb2.HealthCheckRequest(service="non.existent.Service")
+        )
     assert ctx.value.code() == grpc.StatusCode.NOT_FOUND
 
 
 async def test_unary_call_with_client_and_server_interceptors(
     health_and_interceptors_env: tuple[
-        DeviceTelemetryServicer, pzem_004t_pb2_grpc.DeviceTelemetryStub, health_pb2_grpc.HealthStub, str
-    ]
+        DeviceTelemetryServicer,
+        pzem_004t_pb2_grpc.DeviceTelemetryStub,
+        health_pb2_grpc.HealthStub,
+        str,
+    ],
 ) -> None:
     servicer, stub, _, _ = health_and_interceptors_env
     device = PZEM004TDevice(seed=99)

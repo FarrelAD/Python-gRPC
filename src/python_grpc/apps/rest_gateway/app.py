@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
 import grpc
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from python_grpc.core.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
@@ -51,7 +50,7 @@ state = GatewayState()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Initialize gRPC channel on startup
     state.channel = grpc.aio.insecure_channel(
         GRPC_TARGET,
@@ -98,7 +97,9 @@ async def report_reading(payload: ReadingPayload) -> AckResponse:
             received_at_unix_ms=ack.received_at_unix_ms,
         )
     except grpc.RpcError as exc:
-        raise HTTPException(status_code=502, detail=f"gRPC call failed: {exc.details()}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"gRPC call failed: {exc.details()}"
+        ) from exc
 
 
 @app.post("/api/v1/telemetry/batch", response_model=BatchSummaryResponse)
@@ -129,7 +130,9 @@ async def report_batch(readings: list[ReadingPayload]) -> BatchSummaryResponse:
             avg_active_power=summary.avg_active_power,
         )
     except grpc.RpcError as exc:
-        raise HTTPException(status_code=502, detail=f"gRPC call failed: {exc.details()}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"gRPC call failed: {exc.details()}"
+        ) from exc
 
 
 @app.get("/health")

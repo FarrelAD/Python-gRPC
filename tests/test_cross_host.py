@@ -9,7 +9,7 @@ over HTTP/2 gRPC with a central collector server:
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import grpc
 import pytest
@@ -30,8 +30,7 @@ async def cross_host_topology() -> AsyncGenerator[
         DeviceTelemetryServicer,
         pzem_004t_pb2_grpc.DeviceTelemetryStub,
         pzem_004t_pb2_grpc.DeviceTelemetryStub,
-    ],
-    None,
+    ]
 ]:
     """Spins up a central gRPC server and connects two completely independent
 
@@ -89,7 +88,9 @@ async def test_cross_host_telemetry_streaming(
     received_readings: list[pzem_004t_pb2.ReadingReport] = []
 
     async def _subscriber() -> None:
-        call = monitor_stub.Subscribe(pzem_004t_pb2.SubscribeRequest(device_id="PZEM-CROSS-01"))
+        call = monitor_stub.Subscribe(
+            pzem_004t_pb2.SubscribeRequest(device_id="PZEM-CROSS-01")
+        )
         async for reading in call:
             received_readings.append(reading)
             if len(received_readings) == 3:
@@ -176,7 +177,9 @@ async def test_cross_host_subscriber_disconnect_resilience(
     dev = PZEM004TDevice(device_id="PZEM-DEV-RESILIENT", seed=99)
 
     # 1. Connect subscriber and immediately cancel
-    call = monitor_stub.Subscribe(pzem_004t_pb2.SubscribeRequest(device_id="PZEM-DEV-RESILIENT"))
+    call = monitor_stub.Subscribe(
+        pzem_004t_pb2.SubscribeRequest(device_id="PZEM-DEV-RESILIENT")
+    )
     call.cancel()
 
     # 2. Allow event loop to process cancellation
