@@ -5,10 +5,6 @@ Implements all four gRPC call types:
   - ReportReadings    : client-streaming      (batch upload -> summary)
   - Subscribe         : server-streaming      (live readings pushed out via async Pub/Sub)
   - StreamTelemetry   : bidi-streaming        (continuous two-way exchange)
-
-The overrides below intentionally narrow the untyped signatures inherited from
-the generated pzem_004t_pb2_grpc.DeviceTelemetryServicer base class, which
-pyrefly flags as `bad-override`.
 """
 
 # pyrefly: ignore-errors[bad-override]

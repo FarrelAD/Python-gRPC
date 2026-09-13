@@ -7,9 +7,9 @@ import grpc
 import httpx
 import pytest
 
-from python_grpc.gateway.app import app, state
+from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
+from python_grpc.apps.rest_gateway.app import app, state
 from python_grpc.proto import pzem_004t_pb2_grpc
-from python_grpc.server import DeviceTelemetryServicer
 
 
 @pytest.fixture

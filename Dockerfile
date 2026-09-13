@@ -20,4 +20,4 @@ ENV PYTHONPATH=/app/src
 
 EXPOSE 50051 8000
 
-CMD ["python", "-m", "python_grpc.server"]
+CMD ["python", "-m", "python_grpc.apps.collector"]

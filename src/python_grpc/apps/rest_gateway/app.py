@@ -11,8 +11,8 @@ from fastapi import FastAPI, HTTPException, Query
 import grpc
 from pydantic import BaseModel, Field
 
-from python_grpc.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
-from python_grpc.common.interceptors import RequestIdClientInterceptor
+from python_grpc.core.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
+from python_grpc.core.common.interceptors import RequestIdClientInterceptor
 from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
 
 GRPC_TARGET = os.getenv("GRPC_TARGET", "localhost:50051")

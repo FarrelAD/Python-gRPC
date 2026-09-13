@@ -16,7 +16,7 @@ def main() -> None:
 
     os.environ["GRPC_TARGET"] = args.grpc_target
     print(f"Starting REST-to-gRPC Gateway on http://{args.host}:{args.port} -> gRPC {args.grpc_target}")
-    uvicorn.run("python_grpc.gateway.app:app", host=args.host, port=args.port, reload=False)
+    uvicorn.run("python_grpc.apps.rest_gateway.app:app", host=args.host, port=args.port, reload=False)
 
 
 if __name__ == "__main__":

@@ -7,9 +7,9 @@ from typing import AsyncGenerator
 import grpc
 import pytest
 
-from python_grpc.device import PZEM004TDevice
+from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
+from python_grpc.core.device.pzem_004t import PZEM004TDevice
 from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
-from python_grpc.server import DeviceTelemetryServicer
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ async def telemetry_env() -> AsyncGenerator[
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
 
-    channel = grpc.aio.insecure_channel(f"localhost:{port}")
+    channel = grpc.aio.insecure_channel(f"127.0.0.1:{port}")
     stub = pzem_004t_pb2_grpc.DeviceTelemetryStub(channel)
     device = PZEM004TDevice(seed=42)
 

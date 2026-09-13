@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 
-from python_grpc.client.telemetry import DEFAULT_TARGET, run
+from python_grpc.apps.device_agent.agent import DEFAULT_TARGET, run
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="PZEM-004t gRPC demo client")
+    parser = argparse.ArgumentParser(description="PZEM-004t gRPC IoT Device Agent")
     parser.add_argument("--target", default=DEFAULT_TARGET, help="server address, e.g. localhost:50051")
     parser.add_argument("--device-id", default="PZEM-004T-0001")
     parser.add_argument("--count", type=int, default=5, help="readings per streaming RPC")

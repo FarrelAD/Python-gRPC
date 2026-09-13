@@ -65,30 +65,34 @@ src/python_grpc/
     pzem_004t.proto            # schema (authoritative)
     pzem_004t_pb2.py           # generated message classes
     pzem_004t_pb2_grpc.py      # generated service stubs
-  common/                      # shared enterprise gRPC infrastructure
-    config.py                  # HTTP/2 keepalive & channel options
-    interceptors.py            # client & server interceptors (tracing, metrics)
-  device/
-    pzem_004t.py               # PZEM004TDevice simulator
-  client/
-    telemetry.py               # resilient gRPC client with health check & interceptor
-    __main__.py                # CLI entry point
-  server/
-    servicer.py                # DeviceTelemetryServicer (all 4 RPCs)
-    app.py                     # server bootstrap with grpc.health.v1 & interceptor
-    __main__.py                # CLI entry point
-  gateway/
-    app.py                     # FastAPI REST-to-gRPC gateway
-    __main__.py                # CLI entry point
+  core/                        # shared core domain and infrastructure
+    common/
+      config.py                # HTTP/2 keepalive & channel options
+      interceptors.py          # client & server interceptors (tracing, metrics)
+    device/
+      pzem_004t.py             # PZEM004TDevice hardware physics simulator
+  apps/                        # autonomous deployable applications
+    collector/                 # Cloud-tier: Telemetry Collector Server
+      app.py                   # server lifecycle, health check, graceful shutdown
+      servicer.py              # in-memory pub/sub telemetry broadcast servicer
+      __main__.py              # CLI entry point (python -m python_grpc.apps.collector)
+    device_agent/              # Edge-tier: IoT Hardware Agent
+      agent.py                 # resilient reporting, health checking, streaming
+      __main__.py              # CLI entry point (python -m python_grpc.apps.device_agent)
+    rest_gateway/              # Consumer-tier: FastAPI REST-to-gRPC Gateway
+      app.py                   # FastAPI proxy endpoints (unary & batch)
+      __main__.py              # CLI entry point (python -m python_grpc.apps.rest_gateway)
 scripts/
   gen_proto.py                 # regenerate stubs from the proto
+  simulate_cross_host.py       # multi-host cross-network simulation script
 tests/
-  test_device.py               # simulator unit tests
-  test_telemetry.py            # end-to-end RPC tests (local server)
+  test_device.py               # sensor simulator unit tests
+  test_telemetry.py            # end-to-end 4 gRPC streaming patterns
+  test_cross_host.py           # multi-client pub/sub broadcasting & disconnect resilience
   test_health_and_interceptors.py # gRPC health & interceptor integration tests
   test_gateway.py              # FastAPI REST-to-gRPC gateway integration tests
 Dockerfile                     # multi-app container build
-docker-compose.yml             # multi-service orchestration
+docker-compose.yml             # multi-network orchestration (cloud-tier & edge-tier)
 ```
 
 ## Requirements
@@ -109,17 +113,17 @@ poetry install
 
 #### 1. Start the Telemetry Collector Server (Terminal 1)
 ```bash
-poetry run python -m python_grpc.server --host 0.0.0.0 --port 50051
+poetry run python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051
 ```
 
 #### 2. Run the IoT Device Gateway Client (Terminal 2)
 ```bash
-poetry run python -m python_grpc.client --target localhost:50051 --device-id PZEM-004T-0001 --count 5
+poetry run python -m python_grpc.apps.device_agent --target localhost:50051 --device-id PZEM-004T-0001 --count 5
 ```
 
 #### 3. Start the REST-to-gRPC Gateway (Terminal 3, optional)
 ```bash
-poetry run python -m python_grpc.gateway --host 0.0.0.0 --port 8000 --grpc-target localhost:50051
+poetry run python -m python_grpc.apps.rest_gateway --host 0.0.0.0 --port 8000 --grpc-target localhost:50051
 ```
 Open your browser at `http://localhost:8000/docs` to test Swagger UI or send a cURL request:
 ```bash

@@ -15,10 +15,10 @@ from typing import Any
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
-from python_grpc.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
-from python_grpc.common.interceptors import ServerLoggingAndRecoveryInterceptor
+from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
+from python_grpc.core.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
+from python_grpc.core.common.interceptors import ServerLoggingAndRecoveryInterceptor
 from python_grpc.proto import pzem_004t_pb2_grpc
-from python_grpc.server.servicer import DeviceTelemetryServicer
 
 logger = logging.getLogger("telemetry_collector_server")
 

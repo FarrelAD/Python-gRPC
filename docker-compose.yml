@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.server --host 0.0.0.0 --port 50051
+    command: python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051
     ports:
       - "50051:50051"
     environment:
@@ -26,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.client --target collector.internal:50051 --device-id PZEM-EDGE-001 --count 5
+    command: python -m python_grpc.apps.device_agent --target collector.internal:50051 --device-id PZEM-EDGE-001 --count 5
     depends_on:
       - collector-service
     environment:
@@ -44,7 +44,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.gateway --host 0.0.0.0 --port 8000 --grpc-target collector.internal:50051
+    command: python -m python_grpc.apps.rest_gateway --host 0.0.0.0 --port 8000 --grpc-target collector.internal:50051
     ports:
       - "8000:8000"
     depends_on:

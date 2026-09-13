@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from python_grpc.device import PZEM004TDevice
+from python_grpc.core.device.pzem_004t import PZEM004TDevice
 
 
 @pytest.fixture

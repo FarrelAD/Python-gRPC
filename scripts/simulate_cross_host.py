@@ -17,12 +17,12 @@ import time
 
 import grpc
 
-from python_grpc.client.telemetry import run_unary, check_health
-from python_grpc.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
-from python_grpc.common.interceptors import RequestIdClientInterceptor
-from python_grpc.device import PZEM004TDevice
+from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
+from python_grpc.apps.device_agent.agent import check_health, run_unary
+from python_grpc.core.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
+from python_grpc.core.common.interceptors import RequestIdClientInterceptor
+from python_grpc.core.device.pzem_004t import PZEM004TDevice
 from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
-from python_grpc.server.servicer import DeviceTelemetryServicer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s")
 logger = logging.getLogger("cross_host_sim")
