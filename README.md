@@ -137,7 +137,7 @@ docker compose up --build
 ## Running Tests
 
 ```bash
-poetry run python -m unittest discover -s tests -v
+poetry run pytest -v --cov=python_grpc
 ```
 
 Tests run 14 automated integration tests covering:
