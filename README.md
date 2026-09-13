@@ -140,12 +140,12 @@ docker compose up --build
 poetry run pytest -v --cov=python_grpc
 ```
 
-Tests run 14 automated integration tests covering:
-- Sensor physics and energy accumulation
-- All 4 gRPC streaming patterns
-- Standard gRPC Health Checking (`grpc.health.v1`)
-- Client request-id injection & server duration logging interceptors
-- FastAPI REST-to-gRPC unary and batch forwarding
+Tests run 17 automated integration and unit tests covering:
+- Sensor physics and energy accumulation ([`tests/test_device.py`](tests/test_device.py))
+- All 4 gRPC streaming patterns ([`tests/test_telemetry.py`](tests/test_telemetry.py))
+- Cross-host multi-client pub/sub broadcasting & disconnect resilience ([`tests/test_cross_host.py`](tests/test_cross_host.py))
+- Standard gRPC Health Checking (`grpc.health.v1`) & Interceptors ([`tests/test_health_and_interceptors.py`](tests/test_health_and_interceptors.py))
+- FastAPI REST-to-gRPC unary and batch forwarding ([`tests/test_gateway.py`](tests/test_gateway.py))
 
 ## Type Checking
 
