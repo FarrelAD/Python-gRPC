@@ -3,7 +3,7 @@
 Simulates two or more physically separate hosts communicating over gRPC:
   - Host 1 (Cloud Telemetry Collector Server): Runs gRPC server + health checks
   - Host 2 (Remote Subscriber / Dashboard Client): Subscribes to live readings stream
-  - Host 3 (Edge IoT Meter Gateway): Pushes periodic telemetry readings over gRPC
+  - Host 3 (Telemetry Ingestion Client / Bridge): Pushes periodic telemetry readings over gRPC
 
 Demonstrates that neither host shares memory or Python modules with the others;
 communication is 100% over the wire via HTTP/2 and Protobuf.
@@ -78,8 +78,8 @@ async def main() -> None:
             except asyncio.CancelledError:
                 pass
 
-    # 3. Spawn Host 3 (Edge IoT Meter Gateway Device)
-    host3_logger = logging.getLogger("Host3-IoTEdgeMeter")
+    # 3. Spawn Host 3 (Telemetry Ingestion Client / Bridge Service)
+    host3_logger = logging.getLogger("Host3-IngestionClient")
 
     async def host3_edge_device() -> None:
         await asyncio.sleep(0.2)  # Give Host 2 time to establish subscription
@@ -88,7 +88,7 @@ async def main() -> None:
         async with grpc.aio.insecure_channel(
             target,
             options=DEFAULT_GRPC_CHANNEL_OPTIONS,
-            interceptors=[RequestIdClientInterceptor(client_version="edge-iot-1.0")],
+            interceptors=[RequestIdClientInterceptor(client_version="ingestion-1.0")],
         ) as channel:
             stub = pzem_004t_pb2_grpc.DeviceTelemetryStub(channel)
             host3_logger.info("Host 3 connected to Cloud Server at %s", target)

@@ -18,23 +18,6 @@ services:
           - collector.internal
     restart: unless-stopped
 
-  # -------------------------------------------------------------
-  # Edge Device Tier (Simulates Remote IoT Edge Unit on Host 2)
-  # -------------------------------------------------------------
-  device-agent:
-    image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: python -m python_grpc.apps.device_agent --target collector.internal:50051 --device-id PZEM-EDGE-001 --count 5
-    depends_on:
-      - collector-service
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    networks:
-      edge-tier:
-      cloud-tier:
-    restart: unless-stopped
 
   # -------------------------------------------------------------
   # External Consumer Tier (Simulates REST Consumer on Host 3)

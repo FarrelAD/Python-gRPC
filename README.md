@@ -12,7 +12,7 @@ interact with the gRPC microservice.
 ```mermaid
 flowchart LR
     subgraph Microcontrollers["IoT Microcontrollers (e.g. ESP32)"]
-        ESP32["ESP32 + PZEM-004T\n(mqtt_sensor_node)"]
+        ESP32["ESP32 + PZEM-004T\n(apps/mqtt_sensor_node)\n[paho-mqtt]"]
     end
 
     subgraph MQTTBroker["MQTT Messaging Broker (Port 1883)"]
@@ -20,26 +20,21 @@ flowchart LR
     end
 
     subgraph Bridges["Ingestion Bridges"]
-        Bridge["MQTT-to-gRPC Bridge\n(mqtt_bridge)"]
-    end
-
-    subgraph LinuxEdge["Edge Gateways / Industrial IPCs"]
-        EdgeAgent["Device Agent\n(device_agent)"]
+        Bridge["MQTT-to-gRPC Bridge\n(apps/mqtt_bridge)\n[paho-mqtt + grpc.aio]"]
     end
 
     subgraph Collector["Telemetry Collector Service (Port 50051)"]
-        Coll["Collector Service\n(gRPC Ingestion & Pub/Sub Hub)"]
+        Coll["Collector Service\n(apps/collector)\n(gRPC Ingestion & Pub/Sub Hub)"]
     end
 
     subgraph RESTConsumer["Web / Mobile / Dashboard"]
-        REST["REST-to-gRPC Gateway\n(FastAPI - Port 8000)"]
+        REST["REST-to-gRPC Gateway\n(apps/rest_gateway)\n(FastAPI - Port 8000)"]
     end
 
     ESP32 -->|"MQTT Publish (JSON)"| Broker
     Broker -->|"MQTT Subscribe"| Bridge
-    Bridge -->|"gRPC ReportReading (HTTP/2)"| Coll
-    EdgeAgent ==>|"gRPC Unary / Stream / Bidi (HTTP/2)"| Coll
-    REST -->|"gRPC Unary / Stream"| Coll
+    Bridge ==>|"gRPC ReportReading (HTTP/2)"| Coll
+    REST ==>|"gRPC Unary & Batch (HTTP/2)"| Coll
 ```
 
 ### Industry-Grade Capabilities Implemented
@@ -47,14 +42,13 @@ flowchart LR
 - **Industrial IoT Protocol Hierarchy**:
   - **MQTT**: Lightweight pub/sub for resource-constrained microcontrollers (ESP32) reading PZEM-004T sensors.
   - **MQTT-to-gRPC Ingestion Bridge**: Seamlessly consumes MQTT telemetry topics and bridges them into gRPC.
-  - **Direct Edge-to-Cloud gRPC**: For high-throughput Linux edge gateways and IPCs (`device_agent`).
   - **FastAPI REST Gateway**: Modular HTTP backend for external web/mobile dashboards and REST API consumers.
 - **gRPC Interceptors**:
   - **Client-Side**: Injects distributed tracing headers (`x-request-id`) and `x-client-version`.
   - **Server-Side**: Performance metrics logging (RPC duration, peer IP, status code) and unhandled exception recovery translating errors safely into gRPC status codes.
 - **Official Health Checking (`grpc.health.v1`)**: Exposes standard gRPC health checks for Kubernetes liveness/readiness probes and load balancers.
 - **Connection Resilience**: Configured HTTP/2 keepalive pings (`grpc.keepalive_time_ms`), request timeouts (deadlines), and auto-reconnects.
-- **Container Orchestration**: Multi-container Docker Compose topology orchestrating Mosquitto MQTT, Collector, Device Agent, MQTT Bridge, and REST Gateway across segmented bridge networks.
+- **Container Orchestration**: Multi-container Docker Compose topology orchestrating Mosquitto MQTT, Collector, MQTT Bridge, and REST Gateway across segmented bridge networks.
 
 ### The four gRPC call types
 
@@ -84,9 +78,6 @@ src/python_grpc/
       app.py                   # server lifecycle, health check, graceful shutdown
       servicer.py              # in-memory pub/sub telemetry broadcast servicer
       __main__.py              # CLI entry point (python -m python_grpc.apps.collector)
-    device_agent/              # Edge-tier: High-throughput gRPC IoT Hardware Agent
-      agent.py                 # resilient reporting, health checking, streaming
-      __main__.py              # CLI entry point (python -m python_grpc.apps.device_agent)
     mqtt_sensor_node/          # Edge-tier: Microcontroller (ESP32) MQTT Sensor Node
       app.py                   # sensor reading & MQTT JSON publishing loop
       __main__.py              # CLI entry point (python -m python_grpc.apps.mqtt_sensor_node)
@@ -135,12 +126,7 @@ poetry install
 poetry run python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051
 ```
 
-#### 2. Run the IoT Device Gateway Client (Terminal 2)
-```bash
-poetry run python -m python_grpc.apps.device_agent --target localhost:50051 --device-id PZEM-004T-0001 --count 5
-```
-
-#### 3. Start the REST-to-gRPC Gateway (Terminal 3, optional)
+#### 2. Start the REST-to-gRPC Gateway (Terminal 2)
 ```bash
 poetry run python -m python_grpc.apps.rest_gateway --host 0.0.0.0 --port 8000 --grpc-target localhost:50051
 ```
@@ -151,7 +137,7 @@ curl -X POST "http://localhost:8000/api/telemetry" \
   -d '{"device_id": "REST-01", "voltage": 230.2, "current": 2.1, "active_power": 483.4, "energy": 1.2, "frequency": 50.0, "power_factor": 0.99}'
 ```
 
-#### 4. Run the MQTT-to-gRPC Bridge & Simulated ESP32 Sensor Node (Optional)
+#### 3. Run the MQTT-to-gRPC Bridge & Simulated ESP32 Sensor Node (Terminal 3 & 4)
 If you have an MQTT broker running (such as Mosquitto on port 1883):
 ```bash
 # Start Bridge to forward MQTT messages into gRPC Collector
@@ -162,7 +148,7 @@ poetry run python -m python_grpc.apps.mqtt_sensor_node --broker-host localhost -
 ```
 
 ### Option B: Running with Docker Compose
-Spin up the entire microservice topology (Mosquitto MQTT broker, Collector, Device Agent, MQTT Bridge, and REST Gateway):
+Spin up the entire microservice topology (Mosquitto MQTT broker, Collector, MQTT Bridge, and REST Gateway):
 ```bash
 docker compose up --build
 ```
