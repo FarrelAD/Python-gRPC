@@ -18,23 +18,6 @@ services:
           - collector.internal
     restart: unless-stopped
 
-  # -------------------------------------------------------------
-  # Edge Device Tier (Simulates Remote IoT Edge Unit on Host 2)
-  # -------------------------------------------------------------
-  device-agent:
-    image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: python -m python_grpc.apps.device_agent --target collector.internal:50051 --device-id PZEM-EDGE-001 --count 5
-    depends_on:
-      - collector-service
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    networks:
-      edge-tier:
-      cloud-tier:
-    restart: unless-stopped
 
   # -------------------------------------------------------------
   # External Consumer Tier (Simulates REST Consumer on Host 3)
@@ -52,6 +35,57 @@ services:
     environment:
       - GRPC_TARGET=collector.internal:50051
     networks:
+      cloud-tier:
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # MQTT Broker (Industrial Standard IoT Messaging Tier)
+  # -------------------------------------------------------------
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0
+    command: mosquitto -c /mosquitto-no-auth.conf
+    ports:
+      - "1883:1883"
+    networks:
+      edge-tier:
+        aliases:
+          - broker.internal
+      cloud-tier:
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # IoT Microcontroller Sensor Node (Simulates ESP32 + PZEM-004T)
+  # -------------------------------------------------------------
+  mqtt-sensor-node:
+    image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m python_grpc.apps.mqtt_sensor_node --broker-host broker.internal --broker-port 1883 --device-id ESP32-PZEM-01 --count 5
+    depends_on:
+      - mqtt-broker
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      edge-tier:
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # MQTT-to-gRPC Bridge Service (Translates MQTT pub/sub to gRPC)
+  # -------------------------------------------------------------
+  mqtt-bridge:
+    image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m python_grpc.apps.mqtt_bridge --mqtt-host broker.internal --mqtt-port 1883 --grpc-target collector.internal:50051
+    depends_on:
+      - mqtt-broker
+      - collector-service
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      edge-tier:
       cloud-tier:
     restart: unless-stopped
 

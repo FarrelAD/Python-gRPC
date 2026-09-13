@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 import time
-from typing import Iterator
+from collections.abc import Iterator
 
 from python_grpc.proto import pzem_004t_pb2
 

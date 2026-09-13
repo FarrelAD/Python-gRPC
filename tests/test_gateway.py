@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 import grpc
 import httpx
 import pytest
@@ -13,7 +14,9 @@ from python_grpc.proto import pzem_004t_pb2_grpc
 
 
 @pytest.fixture
-async def gateway_client() -> AsyncGenerator[tuple[httpx.AsyncClient, DeviceTelemetryServicer], None]:
+async def gateway_client() -> AsyncGenerator[
+    tuple[httpx.AsyncClient, DeviceTelemetryServicer]
+]:
     server = grpc.aio.server()
     servicer = DeviceTelemetryServicer()
     pzem_004t_pb2_grpc.add_DeviceTelemetryServicer_to_server(servicer, server)
@@ -40,7 +43,7 @@ async def gateway_client() -> AsyncGenerator[tuple[httpx.AsyncClient, DeviceTele
 
 
 async def test_gateway_unary_post(
-    gateway_client: tuple[httpx.AsyncClient, DeviceTelemetryServicer]
+    gateway_client: tuple[httpx.AsyncClient, DeviceTelemetryServicer],
 ) -> None:
     client, servicer = gateway_client
     payload = {
@@ -53,7 +56,7 @@ async def test_gateway_unary_post(
         "frequency": 50.0,
         "power_factor": 0.99,
     }
-    response = await client.post("/api/v1/telemetry", json=payload)
+    response = await client.post("/api/telemetry", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
@@ -62,7 +65,7 @@ async def test_gateway_unary_post(
 
 
 async def test_gateway_batch_post(
-    gateway_client: tuple[httpx.AsyncClient, DeviceTelemetryServicer]
+    gateway_client: tuple[httpx.AsyncClient, DeviceTelemetryServicer],
 ) -> None:
     client, servicer = gateway_client
     readings = [
@@ -78,7 +81,7 @@ async def test_gateway_batch_post(
         }
         for i in range(3)
     ]
-    response = await client.post("/api/v1/telemetry/batch", json=readings)
+    response = await client.post("/api/telemetry/batch", json=readings)
     assert response.status_code == 200
     data = response.json()
     assert data["received"] == 3

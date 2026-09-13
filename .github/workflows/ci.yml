@@ -44,6 +44,12 @@ jobs:
           poetry run python scripts/gen_proto.py
           git diff --exit-code || (echo "Error: Generated protobuf stubs are out of sync with pzem_004t.proto. Run scripts/gen_proto.py and commit." && exit 1)
 
+      - name: Run Ruff linter
+        run: poetry run ruff check .
+
+      - name: Run Ruff formatter check
+        run: poetry run ruff format --check .
+
       - name: Run strict type checking (Pyrefly)
         run: poetry run pyrefly check
 
