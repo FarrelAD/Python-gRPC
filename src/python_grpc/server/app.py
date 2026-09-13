@@ -1,30 +1,119 @@
-"""Async gRPC telemetry collector application bootstrap."""
+"""Async gRPC telemetry collector application bootstrap with production interceptors,
+
+health checking, and graceful shutdown.
+"""
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
+import os
+import signal
+from typing import Any
 
 import grpc
+from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
+from python_grpc.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
+from python_grpc.common.interceptors import ServerLoggingAndRecoveryInterceptor
 from python_grpc.proto import pzem_004t_pb2_grpc
 from python_grpc.server.servicer import DeviceTelemetryServicer
 
+logger = logging.getLogger("telemetry_collector_server")
 
-async def serve(host: str = "[::]", port: int = 50051) -> None:
-    server = grpc.aio.server()
+
+async def serve(host: str = "0.0.0.0", port: int = 50051) -> None:
+    # 1. Initialize server with production channel options and interceptors
+    interceptors = [ServerLoggingAndRecoveryInterceptor()]
+    server = grpc.aio.server(
+        interceptors=interceptors,
+        options=DEFAULT_GRPC_CHANNEL_OPTIONS,
+    )
+
+    # 2. Register main business servicer
     servicer = DeviceTelemetryServicer()
     pzem_004t_pb2_grpc.add_DeviceTelemetryServicer_to_server(servicer, server)
+
+    # 3. Register standard gRPC Health Servicer (grpc.health.v1)
+    health_servicer = health.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+
+    # Mark services as SERVING
+    service_name = pzem_004t_pb2_grpc.DeviceTelemetryServicer.__name__
+    health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+    health_servicer.set(service_name, health_pb2.HealthCheckResponse.SERVING)
+
     listen_addr = f"{host}:{port}"
     server.add_insecure_port(listen_addr)
     await server.start()
-    print(f"PZEM-004t collector listening on {listen_addr}")
+    logger.info("Collector service started on %s (Health check enabled)", listen_addr)
+
+    # 4. Graceful shutdown handling
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    def _trigger_stop(*args: Any) -> None:
+        logger.info("Shutdown signal received, initiating graceful termination...")
+        health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+        health_servicer.set(service_name, health_pb2.HealthCheckResponse.NOT_SERVING)
+        stop_event.set()
+
+    # On Windows, add_signal_handler is limited, so we handle OS signals if supported
     try:
-        await server.wait_for_termination()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _trigger_stop)
+    except (NotImplementedError, AttributeError):
+        # Fallback for Windows event loops
+        pass
+
+    try:
+        # Wait either for stop event or termination
+        server_task = asyncio.create_task(server.wait_for_termination())
+        stop_task = asyncio.create_task(stop_event.wait())
+
+        done, pending = await asyncio.wait(
+            [server_task, stop_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
     finally:
-        await server.stop(grace=5)
+        logger.info("Stopping gRPC server with 5s grace period...")
+        await server.stop(grace=5.0)
+        logger.info("Collector service stopped cleanly.")
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    asyncio.run(serve())
+    parser = argparse.ArgumentParser(description="PZEM-004t gRPC Telemetry Collector Service")
+    parser.add_argument(
+        "--host",
+        default=os.getenv("COLLECTOR_HOST", "0.0.0.0"),
+        help="Host address to bind to",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("COLLECTOR_PORT", "50051")),
+        help="Port to listen on",
+    )
+    parser.add_argument(
+        "--log-level",
+        default=os.getenv("LOG_LEVEL", "INFO"),
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    try:
+        asyncio.run(serve(host=args.host, port=args.port))
+    except KeyboardInterrupt:
+        logger.info("Application interrupted by user.")
+
+
+if __name__ == "__main__":
+    main()

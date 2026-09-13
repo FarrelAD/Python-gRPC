@@ -1,0 +1,27 @@
+services:
+  collector-service:
+    build: .
+    command: python -m python_grpc.server --host 0.0.0.0 --port 50051
+    ports:
+      - "50051:50051"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  device-agent:
+    build: .
+    command: python -m python_grpc.client --target collector-service:50051 --device-id PZEM-CONTAINER-01 --count 5
+    depends_on:
+      - collector-service
+    environment:
+      - LOG_LEVEL=INFO
+
+  rest-gateway:
+    build: .
+    command: python -m python_grpc.gateway --host 0.0.0.0 --port 8000 --grpc-target collector-service:50051
+    ports:
+      - "8000:8000"
+    depends_on:
+      - collector-service
+    environment:
+      - GRPC_TARGET=collector-service:50051

@@ -1,22 +1,32 @@
-"""gRPC telemetry client used by the demo.
+"""Industry-grade resilient gRPC telemetry client.
 
-Exercises all four gRPC call types against the collector server:
-  - unary         : ReportReading    (single reading -> ack)
-  - client-stream : ReportReadings   (batch upload -> summary)
-  - server-stream : Subscribe        (receive live readings)
-  - bidi-stream   : StreamTelemetry  (continuous two-way exchange)
+Features:
+  - HTTP/2 Keepalive & reconnection channel options
+  - Client interceptor injecting request-id and client version
+  - Client-side timeouts (deadlines) on unary and streams
+  - Comprehensive logging and health-check verification
 """
+
+# pyrefly: ignore-errors[missing-attribute]
 
 from __future__ import annotations
 
 import asyncio
+import logging
+from typing import AsyncIterable
 
 import grpc
+from grpc_health.v1 import health_pb2, health_pb2_grpc
 
+from python_grpc.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
+from python_grpc.common.interceptors import RequestIdClientInterceptor
 from python_grpc.device import PZEM004TDevice
 from python_grpc.proto import pzem_004t_pb2, pzem_004t_pb2_grpc
 
 DEFAULT_TARGET = "localhost:50051"
+DEFAULT_TIMEOUT_S = 10.0
+
+logger = logging.getLogger("telemetry_device_client")
 
 DeviceTelemetryStub = pzem_004t_pb2_grpc.DeviceTelemetryStub
 
@@ -29,48 +39,83 @@ def _fmt(report: pzem_004t_pb2.ReadingReport) -> str:
     )
 
 
-async def run_unary(stub: DeviceTelemetryStub, device: PZEM004TDevice) -> None:
-    ack = await stub.ReportReading(device.read())
-    print(f"[unary]    ReportReading  -> success={ack.success} msg={ack.message!r}")
+async def check_health(channel: grpc.aio.Channel, service_name: str = "") -> bool:
+    """Query the remote gRPC server's standard health service."""
+    health_stub = health_pb2_grpc.HealthStub(channel)
+    try:
+        response = await health_stub.Check(
+            health_pb2.HealthCheckRequest(service=service_name),
+            timeout=3.0,
+        )
+        is_healthy = response.status == health_pb2.HealthCheckResponse.SERVING
+        logger.info(
+            "Health check service=%r status=%s",
+            service_name,
+            health_pb2.HealthCheckResponse.ServingStatus.Name(response.status),
+        )
+        return is_healthy
+    except grpc.RpcError as exc:
+        logger.warning("Health check failed: code=%s details=%s", exc.code(), exc.details())
+        return False
+
+
+async def run_unary(stub: DeviceTelemetryStub, device: PZEM004TDevice, timeout: float = DEFAULT_TIMEOUT_S) -> None:
+    reading = device.read()
+    ack = await stub.ReportReading(reading, timeout=timeout)
+    logger.info("[unary]    ReportReading  -> success=%s msg=%r", ack.success, ack.message)
 
 
 async def run_client_streaming(
-    stub: DeviceTelemetryStub, device: PZEM004TDevice, count: int
+    stub: DeviceTelemetryStub,
+    device: PZEM004TDevice,
+    count: int,
+    timeout: float = DEFAULT_TIMEOUT_S,
 ) -> None:
-    async def readings():
+    async def readings() -> AsyncIterable[pzem_004t_pb2.ReadingReport]:
         for _ in range(count):
             yield device.read()
 
-    summary = await stub.ReportReadings(readings())
-    print(
-        f"[client]   ReportReadings -> received={summary.received} "
-        f"rejected={summary.rejected} avg_power={summary.avg_active_power:.1f}W"
+    summary = await stub.ReportReadings(readings(), timeout=timeout)
+    logger.info(
+        "[client]   ReportReadings -> received=%d rejected=%d avg_power=%.1fW",
+        summary.received,
+        summary.rejected,
+        summary.avg_active_power,
     )
 
 
 async def run_server_streaming(
-    stub: DeviceTelemetryStub, device: PZEM004TDevice, count: int
+    stub: DeviceTelemetryStub,
+    device: PZEM004TDevice,
+    count: int,
 ) -> None:
     request = pzem_004t_pb2.SubscribeRequest(device_id=device.device_id)
-    print(f"[server]   Subscribe      -> live readings for {device.device_id}:")
+    logger.info("[server]   Subscribe      -> live readings for %s:", device.device_id)
     call = stub.Subscribe(request)
     i = 0
-    async for report in call:
-        print(f"           {_fmt(report)}")
-        i += 1
-        if i >= count:
-            call.cancel()
-            break
+    try:
+        async for report in call:
+            logger.info("           %s", _fmt(report))
+            i += 1
+            if i >= count:
+                call.cancel()
+                break
+    except asyncio.CancelledError:
+        pass
 
 
-async def run_bidi(stub: DeviceTelemetryStub, device: PZEM004TDevice, count: int) -> None:
-    async def readings():
+async def run_bidi(
+    stub: DeviceTelemetryStub,
+    device: PZEM004TDevice,
+    count: int,
+) -> None:
+    async def readings() -> AsyncIterable[pzem_004t_pb2.ReadingReport]:
         for _ in range(count):
             yield device.read()
 
-    print(f"[bidi]     StreamTelemetry -> {count} readings sent, acks:")
+    logger.info("[bidi]     StreamTelemetry -> %d readings sent, acks:", count)
     async for ack in stub.StreamTelemetry(readings()):
-        print(f"           success={ack.success} msg={ack.message!r}")
+        logger.info("           success=%s msg=%r", ack.success, ack.message)
 
 
 async def run_demo(
@@ -78,21 +123,38 @@ async def run_demo(
     device_id: str,
     count: int,
     rpcs: set[str],
+    timeout: float = DEFAULT_TIMEOUT_S,
 ) -> None:
     device = PZEM004TDevice(device_id=device_id, read_interval_s=1.0)
-    async with grpc.aio.insecure_channel(target) as channel:
+    interceptors = [RequestIdClientInterceptor(client_version="2.0.0")]
+
+    async with grpc.aio.insecure_channel(
+        target,
+        options=DEFAULT_GRPC_CHANNEL_OPTIONS,
+        interceptors=interceptors,
+    ) as channel:
+        # Verify server health first
+        logger.info("Connecting to collector at %s (Device: %s)", target, device_id)
+        is_healthy = await check_health(channel)
+        if not is_healthy:
+            logger.warning("Target %s is not currently reporting SERVING status.", target)
+
         stub = pzem_004t_pb2_grpc.DeviceTelemetryStub(channel)
-        print(f"Connecting to {target} as {device_id}")
+
         if "unary" in rpcs:
-            await run_unary(stub, device)
+            await run_unary(stub, device, timeout=timeout)
         if "client-stream" in rpcs:
-            await run_client_streaming(stub, device, count)
+            await run_client_streaming(stub, device, count, timeout=timeout)
         if "server-stream" in rpcs:
             await run_server_streaming(stub, device, count)
         if "bidi" in rpcs:
             await run_bidi(stub, device, count)
-        print("Done.")
+        logger.info("Demo complete.")
 
 
 def run(target: str, device_id: str, count: int, rpcs: set[str]) -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     asyncio.run(run_demo(target, device_id, count, rpcs))
