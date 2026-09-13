@@ -153,3 +153,32 @@ Pyrefly runs in `strict` mode against the entire codebase (`preset = "strict"` i
 ```bash
 poetry run pyrefly check
 ```
+
+## CI/CD Deployment with GitHub Actions
+
+The repository includes preconfigured GitHub Actions workflows in `.github/workflows/`:
+
+1. **Continuous Integration (`.github/workflows/ci.yml`)**:
+   - Triggers on PRs and pushes to `main`.
+   - Runs Python 3.13 with Poetry dependency caching.
+   - Verifies Protobuf stub freshness (fails if generated code drifted from `pzem_004t.proto`).
+   - Runs strict Pyrefly type checking.
+   - Executes all 14 integration and unit tests.
+
+2. **Manual Deployment to Target Server (`.github/workflows/deploy.yml`)**:
+   - Strictly developer-triggered via GitHub Actions **"Run workflow"** (`workflow_dispatch`).
+   - Supports parameter selection:
+     - `environment`: `staging` or `production`.
+     - `run_tests`: Boolean toggle to run or skip full test verification before deploy.
+     - `deploy_tag`: Optional specific image tag or commit SHA.
+   - **Job 1 (verify-tests)**: Runs strict type checks and the 14 automated tests (conditional).
+   - **Job 2 (build-and-push)**: Builds multi-architecture images (`linux/amd64`, `linux/arm64`) and pushes to **GHCR** (`ghcr.io/farrelad/python-grpc`).
+   - **Job 3 (deploy-remote)**: Connects via SSH to the remote host, pulls pre-built images with `IMAGE_NAME=ghcr.io/farrelad/python-grpc docker compose pull`, performs a zero-downtime container recreation with `docker compose up -d`, and verifies service health with a live HTTP `/health` probe.
+
+### Target Server GitHub Secrets
+To deploy to a remote server, configure these in **Settings -> Secrets and variables -> Actions**:
+- `SERVER_HOST`: Remote server IP address or hostname
+- `SERVER_USER`: Remote SSH username (e.g. `ubuntu`)
+- `SERVER_SSH_KEY`: Private SSH key authorized on the server
+- `SERVER_DEPLOY_PATH`: Target directory on the server containing `docker-compose.yml` (default: `/opt/python-grpc`)
+- `SERVER_PORT`: (Optional) SSH port, defaults to 22

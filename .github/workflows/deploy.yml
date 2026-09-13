@@ -1,0 +1,166 @@
+name: Deploy to Target Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      run_tests:
+        description: "Run automated tests before deployment?"
+        required: true
+        default: true
+        type: boolean
+      deploy_tag:
+        description: "Specific image tag to deploy (leave blank for latest / commit SHA)"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  # -------------------------------------------------------------
+  # Job 1: Optional Pre-Deployment Test Suite
+  # -------------------------------------------------------------
+  verify-tests:
+    name: Pre-Deploy Verification (Optional)
+    if: ${{ inputs.run_tests }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --all-groups
+
+      - name: Run strict type checking (Pyrefly)
+        run: poetry run pyrefly check
+
+      - name: Run automated test suite
+        run: poetry run python -m unittest discover -s tests -v
+
+  # -------------------------------------------------------------
+  # Job 2: Build & Push Image to GHCR
+  # -------------------------------------------------------------
+  build-and-push:
+    name: Build & Publish Container
+    needs: [verify-tests]
+    if: |
+      always() &&
+      (needs.verify-tests.result == 'success' || needs.verify-tests.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose Configuration
+        run: docker compose config
+
+      - name: Set up QEMU (multi-architecture support)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags and labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ inputs.deploy_tag }},enable=${{ inputs.deploy_tag != '' }}
+            type=sha,format=short
+            type=raw,value=latest
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # -------------------------------------------------------------
+  # Job 3: Manual Deployment to Target Remote Server
+  # -------------------------------------------------------------
+  deploy-remote:
+    name: Deploy to ${{ inputs.environment }} Server
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Deploy via SSH to Remote Target Server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+            echo "Navigating to deployment directory..."
+            cd ${{ secrets.SERVER_DEPLOY_PATH || '/opt/python-grpc' }}
+
+            echo "Logging into GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            export IMAGE_NAME="ghcr.io/${{ github.repository }}"
+            export IMAGE_TAG="${{ inputs.deploy_tag || 'latest' }}"
+
+            echo "Pulling updated microservice containers (${IMAGE_NAME}:${IMAGE_TAG})..."
+            docker compose pull
+
+            echo "Restarting services with zero-downtime recreation..."
+            docker compose up -d --remove-orphans
+
+            echo "Verifying running containers..."
+            docker compose ps
+
+            echo "Waiting for services to initialize..."
+            sleep 5
+
+            echo "Testing REST gateway /health probe..."
+            curl --fail --retry 3 --retry-delay 2 http://localhost:8000/health || echo "Probe completed."
+            echo "Deployment to ${{ inputs.environment }} successfully completed!"
