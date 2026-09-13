@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import unittest
 from typing import override
 
@@ -69,10 +70,27 @@ class TestSubscribe(TelemetryTestCase):
     async def test_streams_live_readings_for_device(self) -> None:
         request = pzem_004t_pb2.SubscribeRequest(device_id=self.device.device_id)
         received: list[pzem_004t_pb2.ReadingReport] = []
-        async for report in self.stub.Subscribe(request):
-            received.append(report)
-            if len(received) == 3:
-                break
+
+        async def _consumer() -> None:
+            call = self.stub.Subscribe(request)
+            async for report in call:
+                received.append(report)
+                if len(received) == 3:
+                    call.cancel()
+                    break
+
+        async def _producer() -> None:
+            # Short yield to ensure subscriber registration is active
+            await asyncio.sleep(0.05)
+            for _ in range(3):
+                await self.stub.ReportReading(self.device.read())
+                await asyncio.sleep(0.01)
+
+        consumer_task = asyncio.create_task(_consumer())
+        producer_task = asyncio.create_task(_producer())
+
+        await asyncio.gather(consumer_task, producer_task)
+
         self.assertEqual(len(received), 3)
         for report in received:
             self.assertEqual(report.device_id, self.device.device_id)

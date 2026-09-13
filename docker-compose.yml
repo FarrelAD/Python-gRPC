@@ -1,4 +1,7 @@
 services:
+  # -------------------------------------------------------------
+  # Cloud Server Tier (Central Telemetry Collector & Health Check)
+  # -------------------------------------------------------------
   collector-service:
     image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
     build:
@@ -9,30 +12,53 @@ services:
       - "50051:50051"
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      cloud-tier:
+        aliases:
+          - collector.internal
     restart: unless-stopped
 
+  # -------------------------------------------------------------
+  # Edge Device Tier (Simulates Remote IoT Edge Unit on Host 2)
+  # -------------------------------------------------------------
   device-agent:
     image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.client --target collector-service:50051 --device-id PZEM-CONTAINER-01 --count 5
+    command: python -m python_grpc.client --target collector.internal:50051 --device-id PZEM-EDGE-001 --count 5
     depends_on:
       - collector-service
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      edge-tier:
+      cloud-tier:
     restart: unless-stopped
 
+  # -------------------------------------------------------------
+  # External Consumer Tier (Simulates REST Consumer on Host 3)
+  # -------------------------------------------------------------
   rest-gateway:
     image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.gateway --host 0.0.0.0 --port 8000 --grpc-target collector-service:50051
+    command: python -m python_grpc.gateway --host 0.0.0.0 --port 8000 --grpc-target collector.internal:50051
     ports:
       - "8000:8000"
     depends_on:
       - collector-service
     environment:
-      - GRPC_TARGET=collector-service:50051
+      - GRPC_TARGET=collector.internal:50051
+    networks:
+      cloud-tier:
     restart: unless-stopped
+
+networks:
+  cloud-tier:
+    name: cloud-tier-network
+    driver: bridge
+  edge-tier:
+    name: edge-tier-network
+    driver: bridge
