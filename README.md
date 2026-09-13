@@ -11,42 +11,50 @@ interact with the gRPC microservice.
 
 ```mermaid
 flowchart LR
-    subgraph RESTConsumer["External REST Consumer"]
-        Web["Web / Mobile App / cURL"]
+    subgraph Microcontrollers["IoT Microcontrollers (e.g. ESP32)"]
+        ESP32["ESP32 + PZEM-004T\n(mqtt_sensor_node)"]
     end
 
-    subgraph Gateway["REST-to-gRPC Gateway (FastAPI)"]
-        GW["gateway/ (app.py)"]
+    subgraph MQTTBroker["MQTT Messaging Broker (Port 1883)"]
+        Broker["Eclipse Mosquitto\n(devices/+/telemetry)"]
     end
 
-    subgraph Device["PZEM-004t Device Gateway (client)"]
-        A1["client/ (telemetry.py)"]
-        A2["device/ (pzem_004t.py)"]
+    subgraph Bridges["Ingestion Bridges"]
+        Bridge["MQTT-to-gRPC Bridge\n(mqtt_bridge)"]
     end
 
-    subgraph Collector["Telemetry Collector Service (server)"]
-        B1["server/ (servicer.py + app.py)"]
-        B2["Health Checking (grpc.health.v1)"]
-        B3["Interceptors (Tracing, Metrics, Recovery)"]
-        B4["in-memory store + logging"]
+    subgraph LinuxEdge["Edge Gateways / Industrial IPCs"]
+        EdgeAgent["Device Agent\n(device_agent)"]
     end
 
-    Web --> |"HTTP/JSON REST API (port 8000)"| GW
-    GW --> |"gRPC Unary / Client-Stream"| B1
-    A1 <==> |"gRPC (HTTP/2) - 4 RPC call types (port 50051)"| B1
-    A1 -- "simulated readings" --> A2
+    subgraph Collector["Telemetry Collector Service (Port 50051)"]
+        Coll["Collector Service\n(gRPC Ingestion & Pub/Sub Hub)"]
+    end
+
+    subgraph RESTConsumer["Web / Mobile / Dashboard"]
+        REST["REST-to-gRPC Gateway\n(FastAPI - Port 8000)"]
+    end
+
+    ESP32 -->|"MQTT Publish (JSON)"| Broker
+    Broker -->|"MQTT Subscribe"| Bridge
+    Bridge -->|"gRPC ReportReading (HTTP/2)"| Coll
+    EdgeAgent ==>|"gRPC Unary / Stream / Bidi (HTTP/2)"| Coll
+    REST -->|"gRPC Unary / Stream"| Coll
 ```
 
 ### Industry-Grade Capabilities Implemented
 
-- **Dual-App Separation**: Telemetry Collector (Server) and IoT Gateway (Client) operate as decoupled microservice applications.
+- **Industrial IoT Protocol Hierarchy**:
+  - **MQTT**: Lightweight pub/sub for resource-constrained microcontrollers (ESP32) reading PZEM-004T sensors.
+  - **MQTT-to-gRPC Ingestion Bridge**: Seamlessly consumes MQTT telemetry topics and bridges them into gRPC.
+  - **Direct Edge-to-Cloud gRPC**: For high-throughput Linux edge gateways and IPCs (`device_agent`).
+  - **FastAPI REST Gateway**: Modular HTTP backend for external web/mobile dashboards and REST API consumers.
 - **gRPC Interceptors**:
   - **Client-Side**: Injects distributed tracing headers (`x-request-id`) and `x-client-version`.
   - **Server-Side**: Performance metrics logging (RPC duration, peer IP, status code) and unhandled exception recovery translating errors safely into gRPC status codes.
 - **Official Health Checking (`grpc.health.v1`)**: Exposes standard gRPC health checks for Kubernetes liveness/readiness probes and load balancers.
 - **Connection Resilience**: Configured HTTP/2 keepalive pings (`grpc.keepalive_time_ms`), request timeouts (deadlines), and auto-reconnects.
-- **REST-to-gRPC Gateway**: FastAPI application translating external HTTP/JSON REST requests into strongly-typed gRPC calls.
-- **Container Orchestration**: Production `Dockerfile` and `docker-compose.yml` for multi-container deployment.
+- **Container Orchestration**: Multi-container Docker Compose topology orchestrating Mosquitto MQTT, Collector, Device Agent, MQTT Bridge, and REST Gateway across segmented bridge networks.
 
 ### The four gRPC call types
 
@@ -72,15 +80,25 @@ src/python_grpc/
     device/
       pzem_004t.py             # PZEM004TDevice hardware physics simulator
   apps/                        # autonomous deployable applications
-    collector/                 # Cloud-tier: Telemetry Collector Server
+    collector/                 # Cloud-tier: Telemetry Collector Server (gRPC only)
       app.py                   # server lifecycle, health check, graceful shutdown
       servicer.py              # in-memory pub/sub telemetry broadcast servicer
       __main__.py              # CLI entry point (python -m python_grpc.apps.collector)
-    device_agent/              # Edge-tier: IoT Hardware Agent
+    device_agent/              # Edge-tier: High-throughput gRPC IoT Hardware Agent
       agent.py                 # resilient reporting, health checking, streaming
       __main__.py              # CLI entry point (python -m python_grpc.apps.device_agent)
-    rest_gateway/              # Consumer-tier: FastAPI REST-to-gRPC Gateway
-      app.py                   # FastAPI proxy endpoints (unary & batch)
+    mqtt_sensor_node/          # Edge-tier: Microcontroller (ESP32) MQTT Sensor Node
+      app.py                   # sensor reading & MQTT JSON publishing loop
+      __main__.py              # CLI entry point (python -m python_grpc.apps.mqtt_sensor_node)
+    mqtt_bridge/               # Bridge-tier: MQTT-to-gRPC Telemetry Ingestion Bridge
+      app.py                   # MQTT subscriber forwarding to collector over gRPC
+      __main__.py              # CLI entry point (python -m python_grpc.apps.mqtt_bridge)
+    rest_gateway/              # Consumer-tier: Modular FastAPI REST-to-gRPC Gateway
+      app.py                   # FastAPI app factory & lifespan
+      config.py                # Gateway configuration settings
+      dependencies.py          # Dependency injection & stub resolver
+      schemas.py               # Pydantic models for validation
+      routers/                 # Modular APIRouters (telemetry, health)
       __main__.py              # CLI entry point (python -m python_grpc.apps.rest_gateway)
 scripts/
   gen_proto.py                 # regenerate stubs from the proto
@@ -91,8 +109,9 @@ tests/
   test_cross_host.py           # multi-client pub/sub broadcasting & disconnect resilience
   test_health_and_interceptors.py # gRPC health & interceptor integration tests
   test_gateway.py              # FastAPI REST-to-gRPC gateway integration tests
+  test_mqtt_pipeline.py        # MQTT sensor node + bridge + gRPC collector tests
 Dockerfile                     # multi-app container build
-docker-compose.yml             # multi-network orchestration (cloud-tier & edge-tier)
+docker-compose.yml             # multi-network orchestration with Mosquitto MQTT broker
 ```
 
 ## Requirements
@@ -132,8 +151,18 @@ curl -X POST "http://localhost:8000/api/telemetry" \
   -d '{"device_id": "REST-01", "voltage": 230.2, "current": 2.1, "active_power": 483.4, "energy": 1.2, "frequency": 50.0, "power_factor": 0.99}'
 ```
 
+#### 4. Run the MQTT-to-gRPC Bridge & Simulated ESP32 Sensor Node (Optional)
+If you have an MQTT broker running (such as Mosquitto on port 1883):
+```bash
+# Start Bridge to forward MQTT messages into gRPC Collector
+poetry run python -m python_grpc.apps.mqtt_bridge --mqtt-host localhost --mqtt-port 1883 --grpc-target localhost:50051
+
+# Start Simulated ESP32 reading PZEM-004T and publishing over MQTT
+poetry run python -m python_grpc.apps.mqtt_sensor_node --broker-host localhost --broker-port 1883 --device-id ESP32-PZEM-01 --count 5
+```
+
 ### Option B: Running with Docker Compose
-Spin up the entire microservice topology:
+Spin up the entire microservice topology (Mosquitto MQTT broker, Collector, Device Agent, MQTT Bridge, and REST Gateway):
 ```bash
 docker compose up --build
 ```
@@ -144,12 +173,13 @@ docker compose up --build
 poetry run pytest -v --cov=python_grpc
 ```
 
-Tests run 17 automated integration and unit tests covering:
+Tests run 18 automated integration and unit tests covering:
 - Sensor physics and energy accumulation ([`tests/test_device.py`](tests/test_device.py))
 - All 4 gRPC streaming patterns ([`tests/test_telemetry.py`](tests/test_telemetry.py))
 - Cross-host multi-client pub/sub broadcasting & disconnect resilience ([`tests/test_cross_host.py`](tests/test_cross_host.py))
 - Standard gRPC Health Checking (`grpc.health.v1`) & Interceptors ([`tests/test_health_and_interceptors.py`](tests/test_health_and_interceptors.py))
 - FastAPI REST-to-gRPC unary and batch forwarding ([`tests/test_gateway.py`](tests/test_gateway.py))
+- Simulated ESP32 MQTT pub/sub ingestion into gRPC Collector ([`tests/test_mqtt_pipeline.py`](tests/test_mqtt_pipeline.py))
 
 ## Code Formatting & Linting
 
