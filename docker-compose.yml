@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051 --mqtt-host broker.internal --mqtt-port 1883
+    command: collector --host 0.0.0.0 --port 50051 --mqtt-host broker.internal --mqtt-port 1883
     ports:
       - "50051:50051"
     depends_on:
@@ -32,7 +32,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.apps.rest_gateway --host 0.0.0.0 --port 8000 --grpc-target collector.internal:50051
+    command: gateway --host 0.0.0.0 --port 8000 --grpc-target collector.internal:50051
     ports:
       - "8000:8000"
     depends_on:
@@ -66,7 +66,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.apps.mqtt_sensor_node --broker-host broker.internal --broker-port 1883 --device-id ESP32-PZEM-01 --count 5
+    command: sensor-node --broker-host broker.internal --broker-port 1883 --device-id ESP32-PZEM-01 --count 5
     depends_on:
       - mqtt-broker
     environment:
