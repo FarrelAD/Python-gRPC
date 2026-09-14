@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
 import grpc
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from python_grpc.apps.rest_gateway.dependencies import get_telemetry_stub
 from python_grpc.apps.rest_gateway.schemas import (
@@ -85,3 +88,35 @@ async def report_batch(
         raise HTTPException(
             status_code=502, detail=f"gRPC call failed: {exc.details()}"
         ) from exc
+
+
+@router.get("/live")
+async def stream_live_telemetry(
+    stub: TelemetryStubDep,
+    device_id: str = "*",
+) -> StreamingResponse:
+    """Stream live telemetry from gRPC Collector to HTTP clients via Server-Sent Events (SSE)."""
+
+    async def _event_generator() -> AsyncGenerator[str]:
+        request = pzem_004t_pb2.SubscribeRequest(device_id=device_id)
+        call = stub.Subscribe(request)
+        try:
+            async for reading in call:
+                payload = {
+                    "device_id": reading.device_id,
+                    "device_type": reading.device_type,
+                    "timestamp_unix_ms": reading.timestamp_unix_ms,
+                    "voltage": reading.voltage,
+                    "current": reading.current,
+                    "active_power": reading.active_power,
+                    "energy": reading.energy,
+                    "frequency": reading.frequency,
+                    "power_factor": reading.power_factor,
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+        except (grpc.RpcError, asyncio.CancelledError):
+            return
+        finally:
+            call.cancel()
+
+    return StreamingResponse(_event_generator(), media_type="text/event-stream")

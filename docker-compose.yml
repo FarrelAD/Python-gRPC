@@ -7,15 +7,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051
+    command: python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051 --mqtt-host broker.internal --mqtt-port 1883
     ports:
       - "50051:50051"
+    depends_on:
+      - mqtt-broker
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MQTT_BROKER_HOST=broker.internal
+      - MQTT_BROKER_PORT=1883
     networks:
       cloud-tier:
         aliases:
           - collector.internal
+      edge-tier:
     restart: unless-stopped
 
 
@@ -70,24 +75,6 @@ services:
       edge-tier:
     restart: unless-stopped
 
-  # -------------------------------------------------------------
-  # MQTT-to-gRPC Bridge Service (Translates MQTT pub/sub to gRPC)
-  # -------------------------------------------------------------
-  mqtt-bridge:
-    image: ${IMAGE_NAME:-python-grpc}:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: python -m python_grpc.apps.mqtt_bridge --mqtt-host broker.internal --mqtt-port 1883 --grpc-target collector.internal:50051
-    depends_on:
-      - mqtt-broker
-      - collector-service
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    networks:
-      edge-tier:
-      cloud-tier:
-    restart: unless-stopped
 
 networks:
   cloud-tier:

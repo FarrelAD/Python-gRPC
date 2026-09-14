@@ -19,12 +19,12 @@ flowchart LR
         Broker["Eclipse Mosquitto\n(devices/+/telemetry)"]
     end
 
-    subgraph Bridges["Ingestion Bridges"]
-        Bridge["MQTT-to-gRPC Bridge\n(apps/mqtt_bridge)\n[paho-mqtt + grpc.aio]"]
-    end
-
     subgraph Collector["Telemetry Collector Service (Port 50051)"]
-        Coll["Collector Service\n(apps/collector)\n(gRPC Ingestion & Pub/Sub Hub)"]
+        MQTTSub["Embedded MQTT Consumer\n(paho-mqtt)"]
+        Serv["DeviceTelemetryServicer\n(Pub/Sub & In-Memory Store)"]
+        gRPCServer["gRPC Server (HTTP/2)\n(Port 50051)"]
+        MQTTSub -->|"Internal Ingest"| Serv
+        Serv <--> gRPCServer
     end
 
     subgraph RESTConsumer["Web / Mobile / Dashboard"]
@@ -32,23 +32,22 @@ flowchart LR
     end
 
     ESP32 -->|"MQTT Publish (JSON)"| Broker
-    Broker -->|"MQTT Subscribe"| Bridge
-    Bridge ==>|"gRPC ReportReading (HTTP/2)"| Coll
-    REST ==>|"gRPC Unary & Batch (HTTP/2)"| Coll
+    Broker -->|"MQTT Subscribe"| MQTTSub
+    REST ==>|"gRPC Unary & Batch (HTTP/2)"| gRPCServer
 ```
 
 ### Industry-Grade Capabilities Implemented
 
 - **Industrial IoT Protocol Hierarchy**:
   - **MQTT**: Lightweight pub/sub for resource-constrained microcontrollers (ESP32) reading PZEM-004T sensors.
-  - **MQTT-to-gRPC Ingestion Bridge**: Seamlessly consumes MQTT telemetry topics and bridges them into gRPC.
+  - **Embedded MQTT Ingestion**: Telemetry Collector directly consumes MQTT telemetry topics into its real-time pub/sub hub.
   - **FastAPI REST Gateway**: Modular HTTP backend for external web/mobile dashboards and REST API consumers.
 - **gRPC Interceptors**:
   - **Client-Side**: Injects distributed tracing headers (`x-request-id`) and `x-client-version`.
   - **Server-Side**: Performance metrics logging (RPC duration, peer IP, status code) and unhandled exception recovery translating errors safely into gRPC status codes.
 - **Official Health Checking (`grpc.health.v1`)**: Exposes standard gRPC health checks for Kubernetes liveness/readiness probes and load balancers.
 - **Connection Resilience**: Configured HTTP/2 keepalive pings (`grpc.keepalive_time_ms`), request timeouts (deadlines), and auto-reconnects.
-- **Container Orchestration**: Multi-container Docker Compose topology orchestrating Mosquitto MQTT, Collector, MQTT Bridge, and REST Gateway across segmented bridge networks.
+- **Container Orchestration**: Multi-container Docker Compose topology orchestrating Mosquitto MQTT, Collector (with embedded MQTT subscriber), and REST Gateway across segmented bridge networks.
 
 ### The four gRPC call types
 
@@ -74,16 +73,14 @@ src/python_grpc/
     device/
       pzem_004t.py             # PZEM004TDevice hardware physics simulator
   apps/                        # autonomous deployable applications
-    collector/                 # Cloud-tier: Telemetry Collector Server (gRPC only)
-      app.py                   # server lifecycle, health check, graceful shutdown
+    collector/                 # Cloud-tier: Telemetry Collector Server (gRPC + Embedded MQTT)
+      app.py                   # server lifecycle, embedded MQTT consumer, health check
+      mqtt_consumer.py         # paho-mqtt background subscriber feeding servicer directly
       servicer.py              # in-memory pub/sub telemetry broadcast servicer
       __main__.py              # CLI entry point (python -m python_grpc.apps.collector)
     mqtt_sensor_node/          # Edge-tier: Microcontroller (ESP32) MQTT Sensor Node
       app.py                   # sensor reading & MQTT JSON publishing loop
       __main__.py              # CLI entry point (python -m python_grpc.apps.mqtt_sensor_node)
-    mqtt_bridge/               # Bridge-tier: MQTT-to-gRPC Telemetry Ingestion Bridge
-      app.py                   # MQTT subscriber forwarding to collector over gRPC
-      __main__.py              # CLI entry point (python -m python_grpc.apps.mqtt_bridge)
     rest_gateway/              # Consumer-tier: Modular FastAPI REST-to-gRPC Gateway
       app.py                   # FastAPI app factory & lifespan
       config.py                # Gateway configuration settings
@@ -100,7 +97,7 @@ tests/
   test_cross_host.py           # multi-client pub/sub broadcasting & disconnect resilience
   test_health_and_interceptors.py # gRPC health & interceptor integration tests
   test_gateway.py              # FastAPI REST-to-gRPC gateway integration tests
-  test_mqtt_pipeline.py        # MQTT sensor node + bridge + gRPC collector tests
+  test_mqtt_pipeline.py        # Embedded MQTT ingestion & gRPC live streaming tests
 Dockerfile                     # multi-app container build
 docker-compose.yml             # multi-network orchestration with Mosquitto MQTT broker
 ```
@@ -123,7 +120,7 @@ poetry install
 
 #### 1. Start the Telemetry Collector Server (Terminal 1)
 ```bash
-poetry run python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051
+poetry run python -m python_grpc.apps.collector --host 0.0.0.0 --port 50051 --mqtt-host localhost --mqtt-port 1883
 ```
 
 #### 2. Start the REST-to-gRPC Gateway (Terminal 2)
@@ -137,18 +134,15 @@ curl -X POST "http://localhost:8000/api/telemetry" \
   -d '{"device_id": "REST-01", "voltage": 230.2, "current": 2.1, "active_power": 483.4, "energy": 1.2, "frequency": 50.0, "power_factor": 0.99}'
 ```
 
-#### 3. Run the MQTT-to-gRPC Bridge & Simulated ESP32 Sensor Node (Terminal 3 & 4)
+#### 3. Run the Simulated ESP32 Sensor Node (Terminal 3)
 If you have an MQTT broker running (such as Mosquitto on port 1883):
 ```bash
-# Start Bridge to forward MQTT messages into gRPC Collector
-poetry run python -m python_grpc.apps.mqtt_bridge --mqtt-host localhost --mqtt-port 1883 --grpc-target localhost:50051
-
 # Start Simulated ESP32 reading PZEM-004T and publishing over MQTT
 poetry run python -m python_grpc.apps.mqtt_sensor_node --broker-host localhost --broker-port 1883 --device-id ESP32-PZEM-01 --count 5
 ```
 
 ### Option B: Running with Docker Compose
-Spin up the entire microservice topology (Mosquitto MQTT broker, Collector, MQTT Bridge, and REST Gateway):
+Spin up the entire microservice topology (Mosquitto MQTT broker, Collector with embedded MQTT, and REST Gateway):
 ```bash
 docker compose up --build
 ```
