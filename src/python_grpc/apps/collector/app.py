@@ -1,4 +1,4 @@
-"""Async gRPC telemetry collector application bootstrap with production interceptors,
+"""Async gRPC telemetry collector application bootstrap with custom interceptors,
 
 health checking, and graceful shutdown.
 """
@@ -31,7 +31,7 @@ async def serve(
     mqtt_port: int = 1883,
     mqtt_topic: str = "devices/+/telemetry",
 ) -> None:
-    # 1. Initialize server with production channel options and interceptors
+    # 1. Initialize server with channel options and interceptors
     interceptors = [ServerLoggingAndRecoveryInterceptor()]
     server = grpc.aio.server(
         interceptors=interceptors,
