@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-# Production HTTP/2 channel options for keepalive and resiliency
+# Recommended HTTP/2 channel options for keepalive and connection resiliency
 DEFAULT_GRPC_CHANNEL_OPTIONS: list[tuple[str, Any]] = [
     ("grpc.keepalive_time_ms", 30000),  # Send keepalive ping every 30s
     ("grpc.keepalive_timeout_ms", 10000),  # Keepalive ping timeout 10s

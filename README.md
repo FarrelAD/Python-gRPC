@@ -1,11 +1,11 @@
-# Python gRPC — PZEM-004t Industry-Grade Microservices & Gateway Prototype
+# Python gRPC — PZEM-004t Experimental Microservices & Learning Lab
 
-An end-to-end demonstration of **industry-grade gRPC in Python** using the async
-`grpc.aio` API. A simulated electrical device reads live data from a
-**PZEM-004t** AC power meter (voltage, current, active power, energy,
-frequency, power factor) and pushes it over gRPC to a collector server, with an
-optional **FastAPI REST-to-gRPC Gateway** allowing external REST API consumers to
-interact with the gRPC microservice.
+A hands-on learning and experimental project exploring **gRPC in Python** using the async
+`grpc.aio` API. Built to understand how gRPC communication patterns work in practice,
+this project simulates an electrical device reading data from a **PZEM-004t** AC power
+meter (voltage, current, active power, energy, frequency, power factor) and streaming
+it over gRPC to a collector server, complemented by a **FastAPI REST-to-gRPC Gateway**
+to explore how external REST clients interact with internal gRPC microservices.
 
 ## Architecture
 
@@ -36,9 +36,9 @@ flowchart LR
     REST ==>|"gRPC Unary & Batch (HTTP/2)"| gRPCServer
 ```
 
-### Industry-Grade Capabilities Implemented
+### Key Features & Patterns Explored
 
-- **Industrial IoT Protocol Hierarchy**:
+- **IoT Protocol Integration**:
   - **MQTT**: Lightweight pub/sub for resource-constrained microcontrollers (ESP32) reading PZEM-004T sensors.
   - **Embedded MQTT Ingestion**: Telemetry Collector directly consumes MQTT telemetry topics into its real-time pub/sub hub.
   - **FastAPI REST Gateway**: Modular HTTP backend for external web/mobile dashboards and REST API consumers.
