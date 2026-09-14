@@ -79,6 +79,26 @@ class DeviceTelemetryServicer(pzem_004t_pb2_grpc.DeviceTelemetryServicer):
                     "Subscriber queue full, dropping reading for %s", report.device_id
                 )
 
+    def ingest_reading(self, report: pzem_004t_pb2.ReadingReport) -> pzem_004t_pb2.Ack:
+        """Ingest a reading from an internal/embedded source (such as MQTT) and broadcast."""
+        if not _is_valid(report):
+            logger.warning(
+                "Rejected invalid internal reading from %s", report.device_id
+            )
+            return _ack(False, f"rejected invalid reading from {report.device_id}")
+        self._readings.append(report)
+        self._broadcast(report)
+        logger.info(
+            "Ingested reading device=%s v=%.1fV i=%.2fA p=%.1fW",
+            report.device_id,
+            report.voltage,
+            report.current,
+            report.active_power,
+        )
+        return _ack(
+            True, f"stored reading #{len(self._readings)} from {report.device_id}"
+        )
+
     @override
     async def ReportReading(
         self,

@@ -15,6 +15,7 @@ from typing import Any
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
+from python_grpc.apps.collector.mqtt_consumer import CollectorMQTTConsumer
 from python_grpc.apps.collector.servicer import DeviceTelemetryServicer
 from python_grpc.core.common.config import DEFAULT_GRPC_CHANNEL_OPTIONS
 from python_grpc.core.common.interceptors import ServerLoggingAndRecoveryInterceptor
@@ -23,7 +24,13 @@ from python_grpc.proto import pzem_004t_pb2_grpc
 logger = logging.getLogger("telemetry_collector_server")
 
 
-async def serve(host: str = "0.0.0.0", port: int = 50051) -> None:
+async def serve(
+    host: str = "0.0.0.0",
+    port: int = 50051,
+    mqtt_host: str | None = None,
+    mqtt_port: int = 1883,
+    mqtt_topic: str = "devices/+/telemetry",
+) -> None:
     # 1. Initialize server with production channel options and interceptors
     interceptors = [ServerLoggingAndRecoveryInterceptor()]
     server = grpc.aio.server(
@@ -49,7 +56,18 @@ async def serve(host: str = "0.0.0.0", port: int = 50051) -> None:
     await server.start()
     logger.info("Collector service started on %s (Health check enabled)", listen_addr)
 
-    # 4. Graceful shutdown handling
+    # 4. Start embedded MQTT consumer if host is configured
+    mqtt_consumer: CollectorMQTTConsumer | None = None
+    if mqtt_host:
+        mqtt_consumer = CollectorMQTTConsumer(
+            servicer=servicer,
+            broker_host=mqtt_host,
+            broker_port=mqtt_port,
+            topic=mqtt_topic,
+        )
+        mqtt_consumer.start()
+
+    # 5. Graceful shutdown handling
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
 
@@ -79,6 +97,8 @@ async def serve(host: str = "0.0.0.0", port: int = 50051) -> None:
         for task in pending:
             task.cancel()
     finally:
+        if mqtt_consumer is not None:
+            mqtt_consumer.stop()
         logger.info("Stopping gRPC server with 5s grace period...")
         await server.stop(grace=5.0)
         logger.info("Collector service stopped cleanly.")
@@ -100,6 +120,22 @@ def main() -> None:
         help="Port to listen on",
     )
     parser.add_argument(
+        "--mqtt-host",
+        default=os.getenv("MQTT_BROKER_HOST", None),
+        help="Optional MQTT broker host to subscribe to sensor readings",
+    )
+    parser.add_argument(
+        "--mqtt-port",
+        type=int,
+        default=int(os.getenv("MQTT_BROKER_PORT", "1883")),
+        help="MQTT broker port",
+    )
+    parser.add_argument(
+        "--mqtt-topic",
+        default=os.getenv("MQTT_TOPIC", "devices/+/telemetry"),
+        help="MQTT topic filter to subscribe to",
+    )
+    parser.add_argument(
         "--log-level",
         default=os.getenv("LOG_LEVEL", "INFO"),
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -112,7 +148,15 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     try:
-        asyncio.run(serve(host=args.host, port=args.port))
+        asyncio.run(
+            serve(
+                host=args.host,
+                port=args.port,
+                mqtt_host=args.mqtt_host,
+                mqtt_port=args.mqtt_port,
+                mqtt_topic=args.mqtt_topic,
+            )
+        )
     except KeyboardInterrupt:
         logger.info("Application interrupted by user.")
 
